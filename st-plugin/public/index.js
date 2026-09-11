@@ -181,19 +181,74 @@ async function handleServerEvent(eventType, payload) {
 }
 
 /**
- * 渲染前端设置抽屉面板
+ * 找到扩展抽屉中用于挂载面板的容器。
+ * 不同 SillyTavern 版本/皮肤把面板容器放在 #extensions_settings2 或 #extensions_settings,
+ * 所以两个都试,避免"面板明明装好了却不在抽屉里"。
  */
-async function renderSettingsPanel() {
-  const targetParent = document.getElementById('extensions_settings');
-  if (!targetParent) return;
-
-  let panel = document.getElementById('st-sync-settings-panel');
-  if (!panel) {
-    panel = document.createElement('div');
-    panel.id = 'st-sync-settings-panel';
-    panel.className = 'st-sync-settings-container';
-    targetParent.appendChild(panel);
+function findPanelContainer() {
+  const selectors = ['#extensions_settings2', '#extensions_settings', '#extensions_settings_container'];
+  for (const selector of selectors) {
+    const el = document.querySelector(selector);
+    if (el) return el;
   }
+  return null;
+}
+
+let settingsPanelEl = null;
+
+function ensurePanelElement() {
+  // 关键:面板元素在挂载前并不在 document 里,getElementById 找不到,
+  // 所以必须自己持有引用,否则"容器延迟出现"时会挂上一个空白面板。
+  if (settingsPanelEl && settingsPanelEl.isConnected) {
+    return settingsPanelEl;
+  }
+
+  const existing = document.getElementById('st-sync-settings-panel');
+  if (existing) {
+    settingsPanelEl = existing;
+    return settingsPanelEl;
+  }
+
+  if (!settingsPanelEl) {
+    settingsPanelEl = document.createElement('div');
+    settingsPanelEl.id = 'st-sync-settings-panel';
+    settingsPanelEl.className = 'st-sync-settings-container';
+  }
+  return settingsPanelEl;
+}
+
+/**
+ * 把面板挂进抽屉;抽屉容器是延迟渲染的,所以带重试。
+ */
+function mountSettingsPanel(attemptsLeft = 20, delayMs = 500) {
+  const panel = ensurePanelElement();
+  const container = findPanelContainer();
+
+  if (container) {
+    if (panel.parentElement !== container) {
+      container.appendChild(panel);
+      console.log(`[ST-Auto-Sync] Settings panel mounted into #${container.id}`);
+    }
+    return true;
+  }
+
+  if (attemptsLeft > 0) {
+    setTimeout(() => mountSettingsPanel(attemptsLeft - 1, delayMs), delayMs);
+    return false;
+  }
+
+  // 兜底:极端情况下挂到 body,至少保证功能可用,并在控制台说明原因
+  if (!panel.parentElement) {
+    document.body.appendChild(panel);
+    console.warn('[ST-Auto-Sync] Could not find an extensions drawer container; panel mounted to <body> as a fallback.');
+  }
+  return false;
+}
+
+async function renderSettingsPanel() {
+  mountSettingsPanel();
+
+  let panel = ensurePanelElement();
 
   // 获取当前后端状态
   let status = {};
@@ -279,6 +334,9 @@ async function renderSettingsPanel() {
       </div>
     </div>
   `;
+
+  // 内容填充完毕后再确认一次挂载:如果抽屉容器是在 await 期间才出现的,这里能补上
+  mountSettingsPanel();
 
   // 绑定事件
   document.querySelectorAll('input[name="st-sync-mode"]').forEach((radio) => {
@@ -415,12 +473,36 @@ function hookSillyTavernEvents() {
 // 扩展自启动入口
 (function initExtension() {
   console.log('[ST-Auto-Sync] Initializing ST-Auto-Sync client extension...');
-  createTopBarIndicator();
-  initSseListener();
-  hookSillyTavernEvents();
 
-  // 延迟注入设置抽屉，等待 ST UI 元素就绪
-  setTimeout(() => {
+  // 面板挂载优先且独立:任何一步出错都不能连累它
+  try {
     renderSettingsPanel();
+  } catch (err) {
+    console.error('[ST-Auto-Sync] Failed to render settings panel:', err);
+  }
+
+  try {
+    createTopBarIndicator();
+  } catch (err) {
+    console.error('[ST-Auto-Sync] Failed to create top bar indicator:', err);
+  }
+
+  try {
+    initSseListener();
+  } catch (err) {
+    console.error('[ST-Auto-Sync] Failed to open SSE channel:', err);
+  }
+
+  try {
+    hookSillyTavernEvents();
+  } catch (err) {
+    console.error('[ST-Auto-Sync] Failed to hook SillyTavern events:', err);
+  }
+
+  // 抽屉容器可能晚于脚本就绪,再补挂一次
+  setTimeout(() => {
+    try {
+      mountSettingsPanel();
+    } catch (_) { }
   }, 1200);
 })();
