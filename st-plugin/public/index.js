@@ -6,6 +6,63 @@
 const MODULE_NAME = 'st-auto-sync';
 const API_BASE = '/api/plugins/st-auto-sync';
 
+/**
+ * SillyTavern 对写操作(POST)启用 CSRF 校验:不带 X-CSRF-Token 会被直接 403。
+ * token 通过 GET /csrf-token 获取(与酒馆前端 script.js 同一套接口)。
+ */
+let csrfTokenCache = '';
+
+async function getCsrfToken() {
+  if (csrfTokenCache) return csrfTokenCache;
+  try {
+    const res = await fetch('/csrf-token');
+    if (res.ok) {
+      const data = await res.json();
+      csrfTokenCache = data?.token || '';
+    }
+  } catch (err) {
+    console.warn('[ST-Auto-Sync] Could not fetch CSRF token:', err?.message || err);
+  }
+  return csrfTokenCache;
+}
+
+/**
+ * 带 CSRF token 的 JSON POST,并对非 JSON 响应(如 403 的 HTML 错误页)给出可读报错。
+ */
+async function postJson(path, payload) {
+  const token = await getCsrfToken();
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['X-CSRF-Token'] = token;
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload ?? {}),
+  });
+
+  const raw = await res.text();
+  let data = null;
+  try {
+    data = raw ? JSON.parse(raw) : null;
+  } catch (_) {
+    data = null;
+  }
+
+  if (!res.ok) {
+    if (res.status === 403) {
+      // token 可能过期,清掉缓存下次重取
+      csrfTokenCache = '';
+      throw new Error('被酒馆拒绝(403 CSRF 校验失败),请刷新页面后重试');
+    }
+    throw new Error(`服务端返回 ${res.status}${data?.error ? ': ' + data.error : ''}`);
+  }
+
+  if (data === null) {
+    throw new Error('服务端返回了非 JSON 内容,请检查酒馆日志');
+  }
+  return data;
+}
+
 let eventSourceRef = null;
 let currentConfig = null;
 let sseConnection = null;
@@ -429,17 +486,12 @@ async function renderSettingsPanel() {
     };
 
     try {
-      const res = await fetch(`${API_BASE}/config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newCfg)
-      });
-      const data = await res.json();
+      const data = await postJson('/config', newCfg);
       if (data.success) {
         if (typeof window['toastr'] !== 'undefined') {
           window['toastr'].success('配置已保存并生效！', 'ST-Auto-Sync');
         }
-        currentConfig = newCfg;
+        currentConfig = { ...newCfg };
         updateIndicator(data);
         refreshPanelBadges(data);
       } else {
@@ -453,15 +505,19 @@ async function renderSettingsPanel() {
   document.getElementById('st-sync-now-btn')?.addEventListener('click', async () => {
     try {
       updateIndicator({ isSyncing: true });
-      const res = await fetch(`${API_BASE}/sync`, { method: 'POST' });
-      const data = await res.json();
+      const data = await postJson('/sync', {});
       if (data.success) {
         if (typeof window['toastr'] !== 'undefined') {
-          window['toastr'].success(`手动同步完成 (上传: ${data.uploadedCount}, 下载: ${data.downloadedCount})`, 'ST-Auto-Sync');
+          window['toastr'].success(`手动同步完成 (上传: ${data.uploadedCount || 0}, 下载: ${data.downloadedCount || 0})`, 'ST-Auto-Sync');
         }
       } else {
+        const reasonMap = {
+          Unconfigured: '还没配置 Hub 地址或同步秘钥,请先填写并点「保存并应用配置」',
+          'Hub URL or Token is not configured': '还没配置 Hub 地址或同步秘钥,请先填写并点「保存并应用配置」'
+        };
+        const reason = data.error || data.reason || '未知原因';
         if (typeof window['toastr'] !== 'undefined') {
-          window['toastr'].error(`同步失败: ${data.error || data.reason}`, 'ST-Auto-Sync');
+          window['toastr'].error(`同步失败: ${reasonMap[reason] || reason}`, 'ST-Auto-Sync');
         }
       }
     } catch (e) {
@@ -489,15 +545,11 @@ function hookSillyTavernEvents() {
         const charName = window['characters']?.[window['this_chid']]?.name || '';
         const currentChatFile = window['selected_chat'] || '';
 
-        // 通知插件后端执行广播
-        fetch(`${API_BASE}/chat-event`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chatFile: currentChatFile ? `chats/${currentChatFile}.jsonl` : '',
-            characterName: charName,
-            type
-          })
+        // 通知插件后端执行广播(需带 CSRF token)
+        postJson('/chat-event', {
+          chatFile: currentChatFile ? `chats/${currentChatFile}.jsonl` : '',
+          characterName: charName,
+          type
         }).catch(() => {});
       } catch (_) {}
     };
