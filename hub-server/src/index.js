@@ -1,5 +1,6 @@
 const http = require('node:http');
 const path = require('node:path');
+const fs = require('node:fs');
 const express = require('express');
 const cors = require('cors');
 const { WebSocketServer } = require('ws');
@@ -386,6 +387,18 @@ setInterval(() => {
     }
   }
 }, 30000);
+
+// 定期历史快照过期清理 (每 12 小时)
+setInterval(() => {
+  try {
+    const usersDir = path.join(DATA_DIR, 'users');
+    if (fs.existsSync(usersDir)) {
+      for (const uKey of fs.readdirSync(usersDir)) {
+        storageManager.cleanExpiredVersions(uKey);
+      }
+    }
+  } catch (_) {}
+}, 12 * 3600 * 1000);
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`===================================================`);

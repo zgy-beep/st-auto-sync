@@ -669,9 +669,25 @@ class SyncClient {
         try {
           if (this.archiveLocalFile(relPath, archiveRoot)) archived += 1;
 
-          const buffer = await this.downloadRawFromHub(`/api/files/download?path=${encodeURIComponent(relPath)}`);
+          this.fileWatcher.suppressPath(relPath);
+
+          let buffer = await this.downloadRawFromHub(`/api/files/download?path=${encodeURIComponent(relPath)}`);
           const localPath = path.join(this.stDataDir, relPath);
           fs.mkdirSync(path.dirname(localPath), { recursive: true });
+
+          // 开箱即聊：全量恢复 settings.json 时，保护本地既有 UI 主题与排版不被云端桌面配置冲垮
+          if (relPath === 'settings.json' && fs.existsSync(localPath)) {
+            try {
+              const localSettings = JSON.parse(fs.readFileSync(localPath, 'utf8'));
+              const remoteSanitized = JSON.parse(buffer.toString('utf8'));
+              const patched = ManifestHelper.patchLocalSettings(localSettings, remoteSanitized);
+              buffer = Buffer.from(JSON.stringify(patched, null, 2), 'utf8');
+              console.log('[SyncClient] Protected local UI while restoring settings.json');
+            } catch (err) {
+              console.warn('[SyncClient] Failed to patch local settings on restore:', err.message);
+            }
+          }
+
           fs.writeFileSync(localPath, buffer);
           restored += 1;
         } catch (err) {
@@ -717,12 +733,24 @@ class SyncClient {
     const archiveRoot = path.join(this.stDataDir, '.stsync', 'restore-backup', stamp);
     const archived = this.archiveLocalFile(relPath, archiveRoot);
 
-    const buffer = await this.downloadRawFromHub(
+    this.fileWatcher.suppressPath(relPath);
+
+    let buffer = await this.downloadRawFromHub(
       `/api/versions/download?path=${encodeURIComponent(relPath)}&version=${encodeURIComponent(versionId)}`
     );
 
     const localPath = path.join(this.stDataDir, relPath);
     fs.mkdirSync(path.dirname(localPath), { recursive: true });
+
+    if (relPath === 'settings.json' && fs.existsSync(localPath)) {
+      try {
+        const localSettings = JSON.parse(fs.readFileSync(localPath, 'utf8'));
+        const remoteSanitized = JSON.parse(buffer.toString('utf8'));
+        const patched = ManifestHelper.patchLocalSettings(localSettings, remoteSanitized);
+        buffer = Buffer.from(JSON.stringify(patched, null, 2), 'utf8');
+      } catch (_) {}
+    }
+
     fs.writeFileSync(localPath, buffer);
 
     const result = {

@@ -25,7 +25,7 @@ class StorageManager {
     const normalized = path.normalize(relativePath).replace(/^(\.\.[\/\\])+/, '');
     const targetPath = path.resolve(userRoot, normalized);
 
-    if (!targetPath.startsWith(userRoot)) {
+    if (targetPath !== userRoot && !targetPath.startsWith(userRoot + path.sep)) {
       throw new Error(`Security Exception: Access denied to path outside user root: ${relativePath}`);
     }
     return targetPath;
@@ -352,6 +352,50 @@ class StorageManager {
         fs.unlinkSync(path.join(dir, stale.id));
       } catch (_) {}
     }
+  }
+
+  /**
+   * 清理超过保留期(默认 60 天)的历史快照及空目录
+   */
+  cleanExpiredVersions(userKey, maxAgeMs = 60 * 24 * 60 * 60 * 1000) {
+    const root = this.getUserVersionsDir(userKey);
+    if (!fs.existsSync(root)) return 0;
+
+    let removed = 0;
+    const now = Date.now();
+
+    const walkAndClean = (dir) => {
+      let entries;
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+      } catch (_) {
+        return;
+      }
+
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walkAndClean(fullPath);
+          try {
+            if (fs.readdirSync(fullPath).length === 0) {
+              fs.rmdirSync(fullPath);
+            }
+          } catch (_) {}
+        } else if (entry.isFile()) {
+          const [stampRaw] = entry.name.split('__');
+          const stamp = Number(stampRaw);
+          if (stamp && now - stamp > maxAgeMs) {
+            try {
+              fs.unlinkSync(fullPath);
+              removed++;
+            } catch (_) {}
+          }
+        }
+      }
+    };
+
+    walkAndClean(root);
+    return removed;
   }
 }
 

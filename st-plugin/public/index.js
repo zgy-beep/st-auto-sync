@@ -283,6 +283,13 @@ async function handleServerEvent(eventType, payload) {
       }
       break;
 
+    case 'restore_done':
+      updateIndicator({ isSyncing: false, connected: true, config: currentConfig });
+      if (payload && (payload.restored > 0 || payload.restoredBytes > 0)) {
+        triggerChatReload('Restore completed from Hub');
+      }
+      break;
+
     case 'sync_error':
       updateIndicator({ isSyncing: false, lastError: payload.error });
       if (typeof window['toastr'] !== 'undefined') {
@@ -457,6 +464,7 @@ function renderVersionList(box, relPath, versions) {
         if (!result.archivedLocalCopy) {
           window['toastr']?.info?.('本机原本没有这个文件,已直接写入', 'ST-Auto-Sync');
         }
+        await triggerChatReload(`Version rollback for ${path2}`);
       } catch (e) {
         alert('回滚失败: ' + e.message);
       } finally {
@@ -694,6 +702,9 @@ async function renderSettingsPanel() {
         console.warn('[ST-Auto-Sync] 恢复失败的文件:', data.failed);
         window['toastr']?.warning?.(`有 ${data.failed.length} 个文件恢复失败(详见控制台)`, 'ST-Auto-Sync');
       }
+      if (data.restored > 0) {
+        await triggerChatReload('Full restore from Hub completed');
+      }
     } catch (e) {
       alert('恢复失败: ' + e.message);
     } finally {
@@ -819,4 +830,10 @@ function hookSillyTavernEvents() {
   setInterval(() => {
     if (!document.hidden) pollStatus();
   }, 10000);
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      pollStatus();
+    }
+  });
 })();
