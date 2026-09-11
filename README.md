@@ -78,24 +78,48 @@ npm start
 
 ### 第二步：安装酒馆插件
 
+> ⚠️ **要装两个地方**：SillyTavern 的「服务端插件」机制只负责注册 `/api/plugins/<id>/...` 接口，**不会**把插件里的 `public/` 前端资源注入到页面。所以前端面板必须同时作为「第三方扩展」放一份，否则拼图面板里看不到这个插件。
+
 在需要同步的每台设备（电脑、笔记本、手机 Termux）上：
 
-1. 打开你的 SillyTavern 安装目录；
-2. 进入 `plugins/` 文件夹；
-3. 将本仓库的 `st-plugin/` 目录复制进去，并重命名为 `st-auto-sync`；
-   ```text
-   SillyTavern/
-   └── plugins/
-       └── st-auto-sync/
-           ├── manifest.json
-           ├── public/
-           └── server/
-   ```
-4. 进入 `plugins/st-auto-sync/` 目录，打开终端运行一次：
+**① 服务端部分（提供 API 接口）**
+
+1. 进入你的 SillyTavern 安装目录下的 `plugins/` 文件夹；
+2. 把本仓库的 `st-plugin/` 复制进去并重命名为 `st-auto-sync`；
+3. 进入该目录装一次依赖：
    ```bash
+   cd plugins/st-auto-sync
    npm install
    ```
-5. 像平时一样启动 SillyTavern。
+
+**② 前端部分（提供设置面板）**
+
+4. 把 `st-plugin/` 里的 `manifest.json` 和 `public/` 复制到第三方扩展目录：
+   ```bash
+   cd <SillyTavern 根目录>
+   mkdir -p public/scripts/extensions/third-party/st-auto-sync
+   cp -r plugins/st-auto-sync/manifest.json plugins/st-auto-sync/public \
+         public/scripts/extensions/third-party/st-auto-sync/
+   ```
+
+装完后目录结构应该是这样：
+
+```text
+SillyTavern/
+├── plugins/
+│   └── st-auto-sync/            ← 服务端：server/ + public/ + manifest.json（已 npm install）
+└── public/scripts/extensions/third-party/
+    └── st-auto-sync/            ← 前端：manifest.json + public/index.js + public/style.css
+```
+
+5. 像平时一样（重新）启动 SillyTavern。启动日志里应出现：
+   ```text
+   Initializing plugin from .../plugins/st-auto-sync/server/index.js
+   [ST-Auto-Sync] Initializing server plugin...
+   [ST-Auto-Sync] Plugin server routes registered successfully.
+   ```
+   如果看到 `Failed to load plugin module; plugin info not found`，说明服务端模块缺少 `info` 导出（SillyTavern 1.15+ 的硬性要求），本仓库已包含该导出，请确认拉的是最新代码。
+
 
 ---
 
