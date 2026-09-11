@@ -4,7 +4,10 @@ services:
     container_name: st-auto-sync-hub
     restart: unless-stopped
     ports:
-      - "8765:8765"
+      # 只绑回环:由反向代理(Caddy/Nginx)对外提供 HTTPS/WSS。
+      # 直接发布到 0.0.0.0 会绕过 ufw(Docker 自带 iptables 规则),
+      # 等于把只靠明文 Token 鉴权的服务裸奔到公网。
+      - "127.0.0.1:8765:8765"
     environment:
       - PORT=8765
       - DATA_DIR=/app/data
