@@ -1,23 +1,41 @@
-/* ST-Auto-Sync 样式文件 */
+/* ST-Auto-Sync 样式
+ *
+ * 约定:
+ *  1) 所有面板规则都限定在 #st-sync-settings-panel 之内 —— 绝不污染 SillyTavern 自身布局。
+ *  2) 输入框/按钮直接复用 ST 原生类(text_pole / menu_button / checkbox_label),
+ *     只在必要时做少量微调,保证和酒馆其它设置面板视觉一致。
+ *  3) 不使用固定像素宽度、不用 nowrap 撑宽,避免把抽屉列挤变形。
+ */
 
-/* 顶部状态指示图标 */
+/* ---------- 顶部状态指示灯 ---------- */
 #st-sync-topbar-icon {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  padding: 4px 8px;
+  gap: 5px;
+  flex: 0 0 auto;
+  max-width: 8.5em;
+  padding: 2px 6px;
   border-radius: 6px;
-  font-size: 0.85rem;
-  transition: all 0.2s ease;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  cursor: pointer;
   user-select: none;
+  transition: background 0.2s ease;
 }
 
 #st-sync-topbar-icon:hover {
   background: rgba(255, 255, 255, 0.1);
 }
 
+#st-sync-status-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.9;
+}
+
 .st-sync-dot {
+  flex: 0 0 auto;
   width: 8px;
   height: 8px;
   border-radius: 50%;
@@ -26,18 +44,18 @@
 
 .st-sync-dot.online {
   background-color: #10b981;
-  box-shadow: 0 0 8px #10b981;
+  box-shadow: 0 0 6px #10b981;
 }
 
 .st-sync-dot.syncing {
   background-color: #3b82f6;
-  box-shadow: 0 0 8px #3b82f6;
+  box-shadow: 0 0 6px #3b82f6;
   animation: st-pulse 1s infinite alternate;
 }
 
 .st-sync-dot.interval {
   background-color: #f59e0b;
-  box-shadow: 0 0 8px #f59e0b;
+  box-shadow: 0 0 6px #f59e0b;
 }
 
 .st-sync-dot.offline {
@@ -46,23 +64,26 @@
 
 @keyframes st-pulse {
   from { opacity: 0.4; transform: scale(0.9); }
-  to { opacity: 1; transform: scale(1.2); }
+  to { opacity: 1; transform: scale(1.1); }
 }
 
-/* 扩展设置面板容器(用 ST 标准 inline-drawer 结构,和「小说连载」等扩展一致) */
-.st-sync-settings-container {
+/* ---------- 抽屉标题栏 ---------- */
+#st-sync-settings-panel {
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--SmartThemeBodyColor, inherit);
   font-family: inherit;
-  color: var(--SmartThemeBodyColor, #e0e0e0);
 }
 
-/* 抽屉标题栏:名称 + 状态徽标 + 折叠箭头 */
-.st-sync-drawer-header {
+#st-sync-settings-panel .st-sync-drawer-header {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
-.st-sync-drawer-title {
+#st-sync-settings-panel .st-sync-drawer-title {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -70,159 +91,118 @@
   white-space: nowrap;
 }
 
-.st-sync-drawer-badge {
+#st-sync-settings-panel .st-sync-drawer-badge,
+#st-sync-settings-panel .st-sync-badge {
   flex: 0 0 auto;
-  font-size: 0.78rem;
-  padding: 2px 8px;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  padding: 1px 7px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.12);
-  color: var(--SmartThemeBodyColor, #e0e0e0);
+  background: rgba(127, 127, 127, 0.25);
   white-space: nowrap;
 }
 
-.inline-drawer-content .st-sync-settings-container,
-.st-sync-settings-container .inline-drawer-content {
-  padding: 12px;
+/* ---------- 面板内容 ---------- */
+#st-sync-settings-panel .inline-drawer-content {
+  padding: 8px 4px 4px 4px;
+  box-sizing: border-box;
+  max-width: 100%;
 }
 
-.st-sync-card {
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  padding: 14px;
-  margin-bottom: 12px;
-}
-
-.st-sync-card-title {
-  font-size: 1rem;
-  font-weight: 600;
-  margin-bottom: 10px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--SmartThemeQuoteColor, #60a5fa);
-}
-
-.st-sync-form-group {
-  margin-bottom: 10px;
+#st-sync-settings-panel .st-sync-card {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  padding: 8px;
+  border: 1px solid rgba(127, 127, 127, 0.25);
+  border-radius: 6px;
+  box-sizing: border-box;
+  max-width: 100%;
 }
 
-.st-sync-form-group label {
+#st-sync-settings-panel .st-sync-headline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+/* 表单标签:与 ST 原生设置项一致的小号灰字 */
+#st-sync-settings-panel .st-sync-card > label {
   font-size: 0.85rem;
   opacity: 0.85;
-}
-
-.st-sync-input {
-  background: rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: inherit;
-  padding: 6px 10px;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.st-sync-input:focus {
-  border-color: #3b82f6;
-}
-
-.st-sync-mode-selector {
-  display: flex;
-  gap: 12px;
   margin-top: 6px;
 }
 
-.st-sync-mode-option {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.85rem;
+#st-sync-settings-panel .st-sync-card > label:first-of-type {
+  margin-top: 0;
 }
 
-.st-sync-mode-option:hover {
-  background: rgba(255, 255, 255, 0.1);
+/* 输入框复用 ST 的 .text_pole,这里只保证宽度不撑破容器 */
+#st-sync-settings-panel .text_pole {
+  width: 100%;
+  box-sizing: border-box;
 }
 
-.st-sync-checkbox-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.st-sync-checkbox-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.st-sync-btn-group {
-  display: flex;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.st-sync-btn {
-  flex: 1;
-  padding: 8px 12px;
-  border-radius: 6px;
-  border: none;
-  font-size: 0.9rem;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-weight: 500;
-  transition: opacity 0.2s;
-}
-
-.st-sync-btn:hover {
-  opacity: 0.9;
-}
-
-.st-sync-btn-primary {
-  background: #2563eb;
-  color: #fff;
-}
-
-.st-sync-btn-secondary {
-  background: rgba(255, 255, 255, 0.15);
-  color: inherit;
-}
-
-.st-sync-badge {
-  display: inline-block;
+#st-sync-settings-panel .st-sync-help-text {
+  display: block;
   font-size: 0.75rem;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.1);
-  margin-left: 6px;
-}
-
-.st-sync-help-text {
-  font-size: 0.75rem;
-  opacity: 0.75;
-  margin-top: 3px;
   line-height: 1.35;
+  opacity: 0.7;
+  margin: 2px 0 4px 0;
+  overflow-wrap: anywhere;
 }
 
-.st-sync-highlight-box {
-  background: rgba(37, 99, 235, 0.12);
-  border: 1px solid rgba(59, 130, 246, 0.25);
-  border-radius: 6px;
-  padding: 8px 10px;
-  margin-bottom: 10px;
+/* 单选/多选:竖排、允许换行,不参与横向挤压 */
+#st-sync-settings-panel .st-sync-options {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 4px 0 2px 0;
+}
+
+#st-sync-settings-panel .checkbox_label {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 0.85rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  margin: 0;
+}
+
+#st-sync-settings-panel .checkbox_label input {
+  flex: 0 0 auto;
+  margin: 3px 0 0 0;
+}
+
+#st-sync-settings-panel .checkbox_label span {
+  min-width: 0;
+}
+
+/* 提示块:左侧一条竖线,不做整块底色 */
+#st-sync-settings-panel .st-sync-notice {
+  margin: 8px 0 2px 0;
+  padding: 6px 8px;
+  border-left: 3px solid var(--SmartThemeQuoteColor, #60a5fa);
+  background: rgba(127, 127, 127, 0.1);
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+/* 按钮行:用 ST 原生 menu_button,窄屏自动换行 */
+#st-sync-settings-panel .st-sync-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+#st-sync-settings-panel .st-sync-actions .menu_button {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: center;
+  white-space: normal;
 }

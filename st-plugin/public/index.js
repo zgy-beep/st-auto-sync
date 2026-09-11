@@ -81,6 +81,21 @@ function createTopBarIndicator() {
 }
 
 /**
+ * 刷新抽屉标题徽标 + 面板内状态徽标
+ */
+function refreshPanelBadges(status = {}) {
+  const drawerText = status.isSyncing ? '同步中…'
+    : status.connected ? '已连接'
+      : (status.lastError ? '未连接' : '未配置');
+
+  const drawerBadge = document.getElementById('st-sync-drawer-badge');
+  if (drawerBadge) drawerBadge.textContent = drawerText;
+
+  const cardBadge = document.getElementById('st-sync-badge-status');
+  if (cardBadge) cardBadge.textContent = status.connected ? '已连接' : '未连接';
+}
+
+/**
  * 更新指示灯状态
  */
 function updateIndicator(status) {
@@ -282,88 +297,97 @@ async function renderSettingsPanel() {
     </div>
 
     <div class="inline-drawer-content" style="display: none;">
-    <div class="st-sync-card">
-      <div class="st-sync-card-title">
-        <span>🔄 SillyTavern 多端自动同步</span>
-        <span class="st-sync-badge" id="st-sync-badge-status">${status.connected ? '已连接' : '未连接'}</span>
-      </div>
+      <div class="st-sync-card">
+        <div class="st-sync-headline">
+          <b>SillyTavern 多端自动同步</b>
+          <span class="st-sync-badge" id="st-sync-badge-status">${status.connected ? '已连接' : '未连接'}</span>
+        </div>
 
-      <div class="st-sync-form-group">
-        <label>Hub 服务端地址 (公网服务器 / NAS)：</label>
-        <input type="text" id="st-sync-hub-url" class="st-sync-input" placeholder="http://your-server-ip:8765" value="${cfg.hubUrl || ''}" />
-      </div>
+        <label for="st-sync-hub-url">Hub 服务端地址</label>
+        <input type="text" id="st-sync-hub-url" class="text_pole" placeholder="http://你的服务器:8765" value="${cfg.hubUrl || ''}" />
+        <small class="st-sync-help-text">填 Hub 地址;用 https:// 会自动走 wss 加密连接。</small>
 
-      <div class="st-sync-form-group">
-        <label>同步秘钥 (Token)：</label>
-        <input type="password" id="st-sync-token" class="st-sync-input" placeholder="输入任意相同密码以互通" value="${cfg.token || ''}" />
-      </div>
+        <label for="st-sync-token">同步秘钥 (Token)</label>
+        <input type="password" id="st-sync-token" class="text_pole" placeholder="所有设备填同一个" value="${cfg.token || ''}" />
 
-      <div class="st-sync-form-group">
-        <label>设备名称 (Device Name)：</label>
-        <input type="text" id="st-sync-dev-name" class="st-sync-input" placeholder="如 PC-Windows 或 Phone-Termux" value="${cfg.deviceName || ''}" />
-      </div>
+        <label for="st-sync-dev-name">设备名称</label>
+        <input type="text" id="st-sync-dev-name" class="text_pole" placeholder="如 PC-Windows 或 Phone-Termux" value="${cfg.deviceName || ''}" />
 
-      <div class="st-sync-form-group">
-        <label>同步模式选择：</label>
-        <div class="st-sync-mode-selector">
-          <label class="st-sync-mode-option">
+        <label>同步模式</label>
+        <div class="st-sync-options">
+          <label class="checkbox_label">
             <input type="radio" name="st-sync-mode" value="realtime" ${cfg.mode === 'realtime' ? 'checked' : ''} />
-            <span>⚡ 实时模式 (同屏即时联动)</span>
+            <span>⚡ 实时模式(同屏即时联动)</span>
           </label>
-          <label class="st-sync-mode-option">
+          <label class="checkbox_label">
             <input type="radio" name="st-sync-mode" value="interval" ${cfg.mode === 'interval' ? 'checked' : ''} />
-            <span>⏱️ 定时轮询 (省电/省流)</span>
+            <span>⏱️ 定时轮询(省电省流量)</span>
           </label>
-          <label class="st-sync-mode-option">
+          <label class="checkbox_label">
             <input type="radio" name="st-sync-mode" value="manual" ${cfg.mode === 'manual' ? 'checked' : ''} />
             <span>🛑 仅手动同步</span>
           </label>
         </div>
-      </div>
 
-      <div class="st-sync-form-group" id="st-sync-interval-group" style="display: ${cfg.mode === 'interval' ? 'flex' : 'none'};">
-        <label>定时同步间隔 (分钟)：</label>
-        <input type="number" id="st-sync-interval-val" class="st-sync-input" min="1" max="1440" value="${cfg.intervalMinutes || 10}" />
-      </div>
+        <div id="st-sync-interval-group" style="display: ${cfg.mode === 'interval' ? 'block' : 'none'};">
+          <label for="st-sync-interval-val">定时同步间隔(分钟)</label>
+          <input type="number" id="st-sync-interval-val" class="text_pole" min="1" max="1440" value="${cfg.intervalMinutes || 10}" />
+        </div>
 
-      <div class="st-sync-form-group st-sync-highlight-box">
-        <label class="st-sync-checkbox-item" style="font-weight: 600;">
-          <input type="checkbox" id="sync-env" ${cfg.syncEnvironment !== false ? 'checked' : ''} />
-          🚀 开箱即聊环境同步 (API / Key / 模型 / 预设)
-        </label>
-        <div class="st-sync-help-text">
-          在多端自动同步 API 密钥 (secrets.json)、模型选型、反代地址与生成预设。新设备一键即聊，无需繁琐重配；智能保留手机与电脑各自独立的 UI 主题与窗口布局。
+        <div class="st-sync-notice">
+          <label class="checkbox_label">
+            <input type="checkbox" id="sync-env" ${cfg.syncEnvironment !== false ? 'checked' : ''} />
+            <span>🚀 开箱即聊环境同步(API / Key / 模型 / 预设)</span>
+          </label>
+          <small class="st-sync-help-text">
+            同步 API 密钥 (secrets.json)、模型选型、反代地址与生成预设,新设备装好即聊;各端 UI 主题与窗口布局互不影响。
+          </small>
+        </div>
+
+        <label>同步数据类别</label>
+        <div class="st-sync-options">
+          <label class="checkbox_label">
+            <input type="checkbox" id="sync-cat-chats" checked disabled />
+            <span>聊天记录(无损合并)</span>
+          </label>
+          <label class="checkbox_label">
+            <input type="checkbox" id="sync-cat-chars" ${(cfg.syncCategories || []).includes('characters') ? 'checked' : ''} />
+            <span>角色卡与头像</span>
+          </label>
+          <label class="checkbox_label">
+            <input type="checkbox" id="sync-cat-worlds" ${(cfg.syncCategories || []).includes('worlds') ? 'checked' : ''} />
+            <span>世界书 (Lorebooks)</span>
+          </label>
+          <label class="checkbox_label">
+            <input type="checkbox" id="sync-cat-presets" ${(cfg.syncCategories || []).includes('presets') || (cfg.syncCategories || []).includes('context') ? 'checked' : ''} />
+            <span>提示词与预设包</span>
+          </label>
+          <label class="checkbox_label">
+            <input type="checkbox" id="sync-cat-personas" ${(cfg.syncCategories || []).includes('personas') ? 'checked' : ''} />
+            <span>个人人设 (Personas)</span>
+          </label>
+        </div>
+
+        <div class="st-sync-actions">
+          <div id="st-sync-save-btn" class="menu_button menu_button_icon">💾 保存并应用配置</div>
+          <div id="st-sync-now-btn" class="menu_button menu_button_icon">🔄 立即手动同步</div>
         </div>
       </div>
-
-      <div class="st-sync-form-group">
-        <label>同步数据类别：</label>
-        <div class="st-sync-checkbox-grid">
-          <label class="st-sync-checkbox-item"><input type="checkbox" id="sync-cat-chats" checked disabled /> 聊天记录 (无损合并)</label>
-          <label class="st-sync-checkbox-item"><input type="checkbox" id="sync-cat-chars" ${(cfg.syncCategories || []).includes('characters') ? 'checked' : ''} /> 角色卡与头像</label>
-          <label class="st-sync-checkbox-item"><input type="checkbox" id="sync-cat-worlds" ${(cfg.syncCategories || []).includes('worlds') ? 'checked' : ''} /> 世界书 (Lorebooks)</label>
-          <label class="st-sync-checkbox-item"><input type="checkbox" id="sync-cat-presets" ${(cfg.syncCategories || []).includes('presets') || (cfg.syncCategories || []).includes('context') ? 'checked' : ''} /> 提示词与预设包</label>
-          <label class="st-sync-checkbox-item"><input type="checkbox" id="sync-cat-personas" ${(cfg.syncCategories || []).includes('personas') ? 'checked' : ''} /> 个人人设 (Personas)</label>
-        </div>
-      </div>
-
-      <div class="st-sync-btn-group">
-        <button id="st-sync-save-btn" class="st-sync-btn st-sync-btn-primary">💾 保存并应用配置</button>
-        <button id="st-sync-now-btn" class="st-sync-btn st-sync-btn-secondary">🔄 立即手动同步</button>
-      </div>
-    </div>
     </div>
   `;
 
   // 内容填充完毕后再确认一次挂载:如果抽屉容器是在 await 期间才出现的,这里能补上
   mountSettingsPanel();
 
+  // 徽标按最新状态刷新
+  refreshPanelBadges(status);
+
   // 绑定事件
   document.querySelectorAll('input[name="st-sync-mode"]').forEach((radio) => {
     radio.addEventListener('change', (e) => {
       const intervalGroup = document.getElementById('st-sync-interval-group');
       if (intervalGroup) {
-        intervalGroup.style.display = e.target.value === 'interval' ? 'flex' : 'none';
+        intervalGroup.style.display = e.target.value === 'interval' ? 'block' : 'none';
       }
     });
   });
@@ -417,6 +441,7 @@ async function renderSettingsPanel() {
         }
         currentConfig = newCfg;
         updateIndicator(data);
+        refreshPanelBadges(data);
       } else {
         alert('保存失败: ' + (data.error || '未知错误'));
       }
