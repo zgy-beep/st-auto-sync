@@ -115,6 +115,54 @@ function init(router) {
     }
   });
 
+  // 4.1 备份总览:Hub 上有历史版本的文件
+  router.get('/backups', async (req, res) => {
+    try {
+      const result = await syncClientInstance.listHubBackups();
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 4.2 某文件的历史版本列表
+  router.get('/versions', async (req, res) => {
+    try {
+      const relPath = req.query.path;
+      if (!relPath) {
+        return res.status(400).json({ success: false, error: 'Missing path param' });
+      }
+      const result = await syncClientInstance.listHubVersions(relPath);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 4.3 全量从 Hub 恢复(只拉不推,覆盖前另存本机旧文件)
+  router.post('/restore', async (req, res) => {
+    try {
+      const result = await syncClientInstance.restoreFromHub();
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 4.4 回滚到某个历史版本
+  router.post('/restore-version', async (req, res) => {
+    try {
+      const { path: relPath, versionId } = req.body || {};
+      if (!relPath || !versionId) {
+        return res.status(400).json({ success: false, error: 'Missing path or versionId' });
+      }
+      const result = await syncClientInstance.restoreVersion(relPath, versionId);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // 5. 前端发送消息拦截上报
   router.post('/chat-event', (req, res) => {
     const { chatFile, characterName, message } = req.body || {};

@@ -358,6 +358,114 @@ function mountSettingsPanel(attemptsLeft = 20, delayMs = 500) {
   return false;
 }
 
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function fmtTimestamp(ts) {
+  if (!ts) return '(未知时间)';
+  try {
+    return new Date(Number(ts)).toLocaleString();
+  } catch (_) {
+    return String(ts);
+  }
+}
+
+function fmtSize(bytes) {
+  const n = Number(bytes) || 0;
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(2)} MB`;
+}
+
+/**
+ * 渲染 Hub 备份总览(哪些文件有历史版本)
+ */
+function renderBackupList(box, files) {
+  if (!files.length) {
+    box.innerHTML = '<small class="st-sync-help-text">还没有历史版本 —— Hub 会在每次「覆盖/删除」前才留存旧版本,所以刚接入时是空的。</small>';
+    return;
+  }
+
+  box.innerHTML = files.map((f) => `
+    <div class="st-sync-backup-row">
+      <div class="st-sync-backup-name" title="${escapeHtml(f.path)}">${escapeHtml(f.path)}</div>
+      <div class="st-sync-backup-meta">${f.versions} 个版本 · 最近 ${fmtTimestamp(f.latestTimestamp)} · 来源 ${escapeHtml(f.latestDevice)}</div>
+      <div class="menu_button menu_button_icon st-sync-backup-open" data-path="${escapeHtml(f.path)}">查看版本</div>
+    </div>
+  `).join('');
+
+  box.querySelectorAll('.st-sync-backup-open').forEach((el) => {
+    el.addEventListener('click', async () => {
+      const relPath = el.getAttribute('data-path');
+      box.innerHTML = `<small class="st-sync-help-text">正在读取「${escapeHtml(relPath)}」的历史版本…</small>`;
+      try {
+        const res = await fetch(`${API_BASE}/versions?path=${encodeURIComponent(relPath)}`);
+        const data = await res.json();
+        renderVersionList(box, relPath, data.versions || []);
+      } catch (e) {
+        box.innerHTML = `<small class="st-sync-help-text">读取失败: ${escapeHtml(e.message)}</small>`;
+      }
+    });
+  });
+}
+
+/**
+ * 渲染某个文件的历史版本列表,每行可一键回滚
+ */
+function renderVersionList(box, relPath, versions) {
+  const header = `
+    <div class="st-sync-backup-head">
+      <span title="${escapeHtml(relPath)}">📄 ${escapeHtml(relPath)}</span>
+      <div class="menu_button menu_button_icon st-sync-backup-back">← 返回列表</div>
+    </div>
+  `;
+
+  const rows = versions.length
+    ? versions.map((v) => `
+        <div class="st-sync-backup-row">
+          <div class="st-sync-backup-name">${fmtTimestamp(v.timestamp)}</div>
+          <div class="st-sync-backup-meta">来源 ${escapeHtml(v.deviceId)} · ${fmtSize(v.size)} · #${escapeHtml(v.hashShort)}</div>
+          <div class="menu_button menu_button_icon st-sync-version-restore"
+               data-path="${escapeHtml(relPath)}" data-version="${escapeHtml(v.id)}">恢复此版本</div>
+        </div>
+      `).join('')
+    : '<small class="st-sync-help-text">该文件没有历史版本。</small>';
+
+  box.innerHTML = header + rows;
+
+  box.querySelector('.st-sync-backup-back')?.addEventListener('click', async () => {
+    const res = await fetch(`${API_BASE}/backups`);
+    const data = await res.json();
+    renderBackupList(box, data.files || []);
+  });
+
+  box.querySelectorAll('.st-sync-version-restore').forEach((el) => {
+    el.addEventListener('click', async () => {
+      const path2 = el.getAttribute('data-path');
+      const versionId = el.getAttribute('data-version');
+      if (!window.confirm(`把「${path2}」回滚到这个版本?\n\n本机当前文件会先另存到 .stsync/restore-backup/ 下。`)) return;
+      el.classList.add('disabled');
+      try {
+        const result = await postJson('/restore-version', { path: path2, versionId });
+        window['toastr']?.success?.(`已回滚:${path2}(${fmtSize(result.restoredBytes)})`, 'ST-Auto-Sync');
+        if (!result.archivedLocalCopy) {
+          window['toastr']?.info?.('本机原本没有这个文件,已直接写入', 'ST-Auto-Sync');
+        }
+      } catch (e) {
+        alert('回滚失败: ' + e.message);
+      } finally {
+        el.classList.remove('disabled');
+      }
+    });
+  });
+}
+
 async function renderSettingsPanel() {
   mountSettingsPanel();
 
@@ -460,6 +568,20 @@ async function renderSettingsPanel() {
           <div id="st-sync-save-btn" class="menu_button menu_button_icon">💾 保存并应用配置</div>
           <div id="st-sync-now-btn" class="menu_button menu_button_icon">🔄 立即手动同步</div>
         </div>
+
+        <div class="st-sync-notice">
+          <label class="checkbox_label">
+            <span><b>🗂 备份与恢复</b></span>
+          </label>
+          <small class="st-sync-help-text">
+            Hub 会在每次覆盖/删除前自动留存旧版本(每文件最多 20 份)。这里可以查看历史版本并回滚,或一键以 Hub 为准恢复本机。
+          </small>
+          <div class="st-sync-actions">
+            <div id="st-sync-restore-btn" class="menu_button menu_button_icon">⬇️ 从 Hub 全量恢复</div>
+            <div id="st-sync-backups-btn" class="menu_button menu_button_icon">📋 查看备份版本</div>
+          </div>
+          <div id="st-sync-backups-panel" class="st-sync-backups-panel" style="display: none;"></div>
+        </div>
       </div>
     </div>
   `;
@@ -553,6 +675,52 @@ async function renderSettingsPanel() {
       }
     } catch (e) {
       alert('同步失败: ' + e.message);
+    }
+  });
+
+  // 6. 从 Hub 全量恢复(只拉不推)
+  document.getElementById('st-sync-restore-btn')?.addEventListener('click', async () => {
+    const ok = window.confirm('将从 Hub 拉取全部文件并覆盖本机。\n\n本机被覆盖的旧文件会先另存到 data/.../.stsync/restore-backup/ 下,可随时找回。\n\n确定继续吗?');
+    if (!ok) return;
+
+    const btn = document.getElementById('st-sync-restore-btn');
+    if (btn) btn.classList.add('disabled');
+    try {
+      const data = await postJson('/restore', {});
+      const msg = `恢复完成:拉取 ${data.restored} 个文件` + (data.archived ? `,本机旧文件另存 ${data.archived} 个` : '');
+      window['toastr']?.success?.(msg, 'ST-Auto-Sync');
+      if (data.archiveDir) console.log('[ST-Auto-Sync] 本机旧文件备份目录:', data.archiveDir);
+      if (data.failed?.length) {
+        console.warn('[ST-Auto-Sync] 恢复失败的文件:', data.failed);
+        window['toastr']?.warning?.(`有 ${data.failed.length} 个文件恢复失败(详见控制台)`, 'ST-Auto-Sync');
+      }
+    } catch (e) {
+      alert('恢复失败: ' + e.message);
+    } finally {
+      if (btn) btn.classList.remove('disabled');
+    }
+  });
+
+  // 7. 查看 Hub 上的历史版本(可回滚)
+  document.getElementById('st-sync-backups-btn')?.addEventListener('click', async () => {
+    const box = document.getElementById('st-sync-backups-panel');
+    if (!box) return;
+
+    if (box.style.display !== 'none' && box.innerHTML.trim()) {
+      box.style.display = 'none';
+      box.innerHTML = '';
+      return;
+    }
+
+    box.style.display = 'block';
+    box.innerHTML = '<small class="st-sync-help-text">正在读取 Hub 备份列表…</small>';
+    try {
+      const res = await fetch(`${API_BASE}/backups`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      renderBackupList(box, data.files || []);
+    } catch (e) {
+      box.innerHTML = `<small class="st-sync-help-text">读取失败: ${escapeHtml(e.message)}(检查 Hub 地址/Token 是否已保存)</small>`;
     }
   });
 }

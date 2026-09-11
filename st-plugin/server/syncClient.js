@@ -592,6 +592,153 @@ class SyncClient {
     return this.downloadAndMergeFile(relPath);
   }
 
+  /**
+   * 下载 Hub 上的原始字节(用于恢复/回滚,不做聊天合并)
+   */
+  async downloadRawFromHub(endpoint) {
+    const url = `${this.config.hubUrl.replace(/\/$/, '')}${endpoint}`;
+    const res = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${this.config.token}`,
+        'x-device-id': this.config.deviceId
+      }
+    });
+    if (!res.ok) {
+      throw new Error(`Hub 返回 HTTP ${res.status}`);
+    }
+    return Buffer.from(await res.arrayBuffer());
+  }
+
+  /**
+   * 把本机文件另存到 .stsync/restore-backup/<时间戳>/ 下(覆盖前的兜底)
+   */
+  archiveLocalFile(relPath, archiveRoot) {
+    const localPath = path.join(this.stDataDir, relPath);
+    if (!fs.existsSync(localPath)) return false;
+
+    const targetPath = path.join(archiveRoot, relPath);
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    fs.copyFileSync(localPath, targetPath);
+    return true;
+  }
+
+  /**
+   * 备份总览:Hub 上有历史版本的文件
+   */
+  async listHubBackups() {
+    return this.fetchApi('/api/backups', 'GET');
+  }
+
+  /**
+   * 某个文件在 Hub 上的历史版本列表
+   */
+  async listHubVersions(relPath) {
+    return this.fetchApi(`/api/versions?path=${encodeURIComponent(relPath)}`, 'GET');
+  }
+
+  /**
+   * 强制从 Hub 拉取(全量恢复):只下载不上传,覆盖前把本机旧文件另存一份
+   * 用于:新设备初始化,或某台设备数据搞乱了想以云端为准
+   */
+  async restoreFromHub() {
+    if (!this.config.hubUrl || !this.config.token) {
+      throw new Error('Hub 地址或 Token 未配置');
+    }
+    if (this.isSyncing) {
+      throw new Error('正在同步中,请稍后再试');
+    }
+
+    this.isSyncing = true;
+    this.notifyUi('sync_started', { trigger: 'restore-from-hub' });
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const archiveRoot = path.join(this.stDataDir, '.stsync', 'restore-backup', stamp);
+
+    let restored = 0;
+    let archived = 0;
+    const failed = [];
+
+    try {
+      // 用空 manifest 请求 diff → 服务端会把"它有的全部文件"都标为需要下载
+      const diffRes = await this.fetchApi('/api/manifest/diff', 'POST', { manifest: {} });
+      const targets = Object.keys(diffRes.server_manifest || {});
+
+      console.log(`[SyncClient] Restore from Hub: ${targets.length} file(s) to pull`);
+
+      for (const relPath of targets) {
+        try {
+          if (this.archiveLocalFile(relPath, archiveRoot)) archived += 1;
+
+          const buffer = await this.downloadRawFromHub(`/api/files/download?path=${encodeURIComponent(relPath)}`);
+          const localPath = path.join(this.stDataDir, relPath);
+          fs.mkdirSync(path.dirname(localPath), { recursive: true });
+          fs.writeFileSync(localPath, buffer);
+          restored += 1;
+        } catch (err) {
+          console.error(`[SyncClient] Restore failed for ${relPath}: ${err.message}`);
+          failed.push({ path: relPath, error: err.message });
+        }
+      }
+
+      // 恢复过程中会触发文件监听,同步一次让本机清单与 Hub 对齐
+      this.manifestHelper.generateLocalManifest({ forceRefresh: true });
+
+      const result = {
+        success: true,
+        restored,
+        archived,
+        failed,
+        archiveDir: archived > 0 ? archiveRoot : null
+      };
+
+      this.state.lastSyncTime = Date.now();
+      this.state.lastError = null;
+      console.log(`[SyncClient] Restore finished: ${restored} restored, ${archived} archived locally`);
+      this.notifyUi('restore_done', result);
+      return result;
+    } catch (err) {
+      this.state.lastError = err.message;
+      this.notifyUi('sync_error', { error: err.message });
+      throw err;
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+
+  /**
+   * 把 Hub 上某个历史版本恢复到本机(覆盖当前文件,先另存本机旧版)
+   */
+  async restoreVersion(relPath, versionId) {
+    if (!this.config.hubUrl || !this.config.token) {
+      throw new Error('Hub 地址或 Token 未配置');
+    }
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const archiveRoot = path.join(this.stDataDir, '.stsync', 'restore-backup', stamp);
+    const archived = this.archiveLocalFile(relPath, archiveRoot);
+
+    const buffer = await this.downloadRawFromHub(
+      `/api/versions/download?path=${encodeURIComponent(relPath)}&version=${encodeURIComponent(versionId)}`
+    );
+
+    const localPath = path.join(this.stDataDir, relPath);
+    fs.mkdirSync(path.dirname(localPath), { recursive: true });
+    fs.writeFileSync(localPath, buffer);
+
+    const result = {
+      success: true,
+      path: relPath,
+      versionId,
+      restoredBytes: buffer.length,
+      archivedLocalCopy: archived,
+      archiveDir: archived ? archiveRoot : null
+    };
+
+    console.log(`[SyncClient] Version ${versionId} restored to ${relPath} (${buffer.length} bytes)`);
+    this.notifyUi('restore_done', result);
+    return result;
+  }
+
   async fetchApi(endpoint, method = 'GET', body = null) {
     const url = `${this.config.hubUrl.replace(/\/$/, '')}${endpoint}`;
     const headers = {

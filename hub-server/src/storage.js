@@ -186,6 +186,173 @@ class StorageManager {
     }
     return false;
   }
+
+  // ---------------------------------------------------------------------------
+  // 版本历史(备份/回滚)
+  //   users/<userKey>/.versions/<relPath>/<时间戳>__<设备>__<短哈希>
+  //   放在 files/ 的同级目录,因此不会被 manifest 扫描到。
+  // ---------------------------------------------------------------------------
+
+  getUserVersionsDir(userKey) {
+    const dir = path.join(this.baseDataDir, 'users', userKey, '.versions');
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    return dir;
+  }
+
+  resolveSafeVersionDir(userKey, relativePath) {
+    const root = path.resolve(this.getUserVersionsDir(userKey));
+    const normalized = path.normalize(relativePath).replace(/^(\.\.[\/\\])+/, '');
+    const dir = path.resolve(root, normalized);
+    if (dir !== root && !dir.startsWith(root + path.sep)) {
+      throw new Error(`Security Exception: Access denied to version path outside user root: ${relativePath}`);
+    }
+    return dir;
+  }
+
+  /**
+   * 覆盖/删除之前,把当前版本留一份历史(供回滚)
+   * @returns {Object|null} 版本元信息
+   */
+  snapshotVersion(userKey, relativePath, deviceId = 'unknown') {
+    const current = this.readFile(userKey, relativePath);
+    if (!current) return null;
+
+    const hash = crypto.createHash('sha256').update(current.buffer).digest('hex');
+    const dir = this.resolveSafeVersionDir(userKey, relativePath);
+    fs.mkdirSync(dir, { recursive: true });
+
+    const stamp = Date.now();
+    const safeDevice = String(deviceId || 'unknown').replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 40);
+    const fileName = `${stamp}__${safeDevice}__${hash.slice(0, 8)}`;
+    const targetPath = path.join(dir, fileName);
+
+    if (!fs.existsSync(targetPath)) {
+      fs.copyFileSync(current.fullPath, targetPath);
+    }
+
+    this.pruneVersions(userKey, relativePath);
+
+    return {
+      id: fileName,
+      path: relativePath,
+      timestamp: stamp,
+      deviceId: safeDevice,
+      hash,
+      size: current.buffer.length
+    };
+  }
+
+  /**
+   * 列出某文件的历史版本(新 → 旧)
+   */
+  listVersions(userKey, relativePath) {
+    const dir = this.resolveSafeVersionDir(userKey, relativePath);
+    if (!fs.existsSync(dir)) return [];
+
+    return fs.readdirSync(dir)
+      .map((name) => {
+        const fullPath = path.join(dir, name);
+        let stat;
+        try {
+          stat = fs.statSync(fullPath);
+        } catch (_) {
+          return null;
+        }
+        if (!stat.isFile()) return null;
+        const [stampRaw, deviceRaw, hashShort] = name.split('__');
+        const timestamp = Number(stampRaw) || stat.mtimeMs;
+        return {
+          id: name,
+          timestamp,
+          deviceId: deviceRaw || 'unknown',
+          hashShort: hashShort || '',
+          size: stat.size
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.timestamp - a.timestamp);
+  }
+
+  /**
+   * 读取指定历史版本内容
+   */
+  readVersion(userKey, relativePath, versionId) {
+    const dir = this.resolveSafeVersionDir(userKey, relativePath);
+    const safeId = path.basename(String(versionId || ''));
+    const fullPath = path.resolve(dir, safeId);
+    if (!fullPath.startsWith(path.resolve(dir) + path.sep) || !fs.existsSync(fullPath)) {
+      return null;
+    }
+    return { fullPath, buffer: fs.readFileSync(fullPath) };
+  }
+
+  /**
+   * 汇总所有有历史版本的条目(给前端"备份列表"用)
+   */
+  summarizeBackups(userKey) {
+    const root = this.getUserVersionsDir(userKey);
+    const result = [];
+
+    const walk = (currentDir, relativePrefix = '') => {
+      if (!fs.existsSync(currentDir)) return;
+      for (const entry of fs.readdirSync(currentDir, { withFileTypes: true })) {
+        const fullPath = path.join(currentDir, entry.name);
+        const relPath = path.posix.join(relativePrefix, entry.name);
+        if (entry.isDirectory()) {
+          walk(fullPath, relPath);
+          continue;
+        }
+        // 版本文件名形如 <时间戳>__<设备>__<短哈希>,据此还原它属于哪个文件
+        const versionDirRel = path.posix.dirname(relPath);
+        const targetRel = versionDirRel === '.' ? entry.name : versionDirRel;
+        const [stampRaw, deviceRaw] = entry.name.split('__');
+        let stat = null;
+        try {
+          stat = fs.statSync(fullPath);
+        } catch (_) {
+          continue;
+        }
+        result.push({
+          path: targetRel,
+          versionId: entry.name,
+          timestamp: Number(stampRaw) || stat.mtimeMs,
+          deviceId: deviceRaw || 'unknown',
+          size: stat.size
+        });
+      }
+    };
+
+    walk(root, '');
+
+    // 按文件聚合
+    const byPath = new Map();
+    for (const item of result) {
+      const bucket = byPath.get(item.path) || { path: item.path, versions: 0, latestTimestamp: 0, latestDevice: 'unknown' };
+      bucket.versions += 1;
+      if (item.timestamp > bucket.latestTimestamp) {
+        bucket.latestTimestamp = item.timestamp;
+        bucket.latestDevice = item.deviceId;
+      }
+      byPath.set(item.path, bucket);
+    }
+
+    return Array.from(byPath.values()).sort((a, b) => b.latestTimestamp - a.latestTimestamp);
+  }
+
+  /**
+   * 每个文件最多保留 N 个历史版本
+   */
+  pruneVersions(userKey, relativePath, keep = Number(process.env.MAX_VERSIONS_PER_FILE || 20)) {
+    const dir = this.resolveSafeVersionDir(userKey, relativePath);
+    const versions = this.listVersions(userKey, relativePath);
+    for (const stale of versions.slice(keep)) {
+      try {
+        fs.unlinkSync(path.join(dir, stale.id));
+      } catch (_) {}
+    }
+  }
 }
 
 module.exports = StorageManager;

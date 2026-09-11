@@ -8,7 +8,8 @@
     "test:gc": "node tests/test_tombstone_gc.js",
     "test:env": "node tests/test_environment_sync.js",
     "test:e2e": "node tests/test_e2e_sync.js",
-    "test": "node tests/test_chat_merger.js && node tests/test_atomic_writer.js && node tests/test_tombstone_gc.js && node tests/test_environment_sync.js && node tests/test_e2e_sync.js"
+    "test": "node tests/test_chat_merger.js && node tests/test_atomic_writer.js && node tests/test_tombstone_gc.js && node tests/test_environment_sync.js && node tests/test_e2e_sync.js && node tests/test_version_history.js",
+    "test:versions": "node tests/test_version_history.js"
   },
   "keywords": [
     "sillytavern",

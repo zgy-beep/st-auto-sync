@@ -80,6 +80,12 @@ app.post('/api/files/upload', authMiddleware, (req, res) => {
     let buffer = Buffer.from(contentBase64, 'base64');
     const deviceId = req.headers['x-device-id'] || 'http-client';
 
+    // 覆盖之前先把当前版本存为历史(供"备份/回滚"使用)
+    const snapshot = storageManager.snapshotVersion(req.userKey, relPath, deviceId);
+    if (snapshot) {
+      console.log(`[Hub Backup] Snapshot kept for ${relPath} (device=${snapshot.deviceId}, size=${snapshot.size})`);
+    }
+
     // 核心重构：如果是聊天记录且服务端已有旧版本，由 Hub 集中执行权威合并！
     if (relPath.endsWith('.jsonl')) {
       const existingFile = storageManager.readFile(req.userKey, relPath);
@@ -169,6 +175,9 @@ app.delete('/api/files/delete', authMiddleware, (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing path param' });
     }
 
+    // 删除前也留一份历史,避免误删无法找回
+    storageManager.snapshotVersion(req.userKey, relPath, req.headers['x-device-id'] || 'http-client');
+
     const deleted = storageManager.deleteFile(req.userKey, relPath);
     if (deleted) {
       const oplogEntry = oplogManager.append(req.userKey, {
@@ -205,6 +214,55 @@ app.get('/api/oplog', authMiddleware, (req, res) => {
 app.get('/api/devices', authMiddleware, (req, res) => {
   const devices = roomManager.getOnlineDevices(req.userKey);
   res.json({ success: true, devices });
+});
+
+// ==========================================
+// 备份 / 历史版本 API
+// ==========================================
+
+// 1) 备份总览:哪些文件有历史版本
+app.get('/api/backups', authMiddleware, (req, res) => {
+  try {
+    const files = storageManager.summarizeBackups(req.userKey);
+    res.json({ success: true, files, maxVersionsPerFile: Number(process.env.MAX_VERSIONS_PER_FILE || 20) });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 2) 某个文件的历史版本列表
+app.get('/api/versions', authMiddleware, (req, res) => {
+  try {
+    const relPath = req.query.path;
+    if (!relPath) {
+      return res.status(400).json({ success: false, error: 'Missing path param' });
+    }
+    res.json({ success: true, path: relPath, versions: storageManager.listVersions(req.userKey, relPath) });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 3) 下载指定历史版本内容(原始字节)
+app.get('/api/versions/download', authMiddleware, (req, res) => {
+  try {
+    const relPath = req.query.path;
+    const versionId = req.query.version;
+    if (!relPath || !versionId) {
+      return res.status(400).json({ success: false, error: 'Missing path or version param' });
+    }
+
+    const version = storageManager.readVersion(req.userKey, relPath, versionId);
+    if (!version) {
+      return res.status(404).json({ success: false, error: 'Version not found' });
+    }
+
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('X-Version-Id', path.basename(String(versionId)));
+    res.send(version.buffer);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // ==========================================

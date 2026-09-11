@@ -206,3 +206,58 @@
   justify-content: center;
   white-space: normal;
 }
+
+/* ---------- 备份 / 版本列表 ---------- */
+#st-sync-settings-panel .st-sync-backups-panel {
+  margin-top: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+#st-sync-settings-panel .st-sync-backup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+
+#st-sync-settings-panel .st-sync-backup-head > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+#st-sync-settings-panel .st-sync-backup-row {
+  display: block;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  border: 1px solid rgba(127, 127, 127, 0.25);
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+#st-sync-settings-panel .st-sync-backup-name {
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+#st-sync-settings-panel .st-sync-backup-meta {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  margin: 2px 0 6px 0;
+  overflow-wrap: anywhere;
+}
+
+#st-sync-settings-panel .st-sync-backup-row .menu_button {
+  display: inline-flex;
+  width: auto;
+}
+
+#st-sync-settings-panel .menu_button.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
