@@ -1,0 +1,184 @@
+/* ST-Auto-Sync 样式文件 */
+
+/* 顶部状态指示图标 */
+#st-sync-topbar-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+#st-sync-topbar-icon:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.st-sync-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.st-sync-dot.online {
+  background-color: #10b981;
+  box-shadow: 0 0 8px #10b981;
+}
+
+.st-sync-dot.syncing {
+  background-color: #3b82f6;
+  box-shadow: 0 0 8px #3b82f6;
+  animation: st-pulse 1s infinite alternate;
+}
+
+.st-sync-dot.interval {
+  background-color: #f59e0b;
+  box-shadow: 0 0 8px #f59e0b;
+}
+
+.st-sync-dot.offline {
+  background-color: #ef4444;
+}
+
+@keyframes st-pulse {
+  from { opacity: 0.4; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1.2); }
+}
+
+/* 扩展设置面板容器 */
+.st-sync-settings-container {
+  padding: 12px;
+  font-family: inherit;
+  color: var(--SmartThemeBodyColor, #e0e0e0);
+}
+
+.st-sync-card {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.st-sync-card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--SmartThemeQuoteColor, #60a5fa);
+}
+
+.st-sync-form-group {
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.st-sync-form-group label {
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.st-sync-input {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: inherit;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.st-sync-input:focus {
+  border-color: #3b82f6;
+}
+
+.st-sync-mode-selector {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.st-sync-mode-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.st-sync-mode-option:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.st-sync-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.st-sync-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.st-sync-btn-group {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.st-sync-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: none;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-weight: 500;
+  transition: opacity 0.2s;
+}
+
+.st-sync-btn:hover {
+  opacity: 0.9;
+}
+
+.st-sync-btn-primary {
+  background: #2563eb;
+  color: #fff;
+}
+
+.st-sync-btn-secondary {
+  background: rgba(255, 255, 255, 0.15);
+  color: inherit;
+}
+
+.st-sync-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  margin-left: 6px;
+}

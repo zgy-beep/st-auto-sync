@@ -1,0 +1,8 @@
+node_modules/
+data/
+temp_*/
+*.log
+.DS_Store
+Thumbs.db
+config.json
+.stsync/

@@ -1,0 +1,20 @@
+{
+  "name": "st-auto-sync",
+  "version": "1.0.0",
+  "description": "SillyTavern multi-device sync solution",
+  "scripts": {
+    "test:merger": "node tests/test_chat_merger_v4_1.js",
+    "test:atomic": "node tests/test_atomic_writer.js",
+    "test:gc": "node tests/test_tombstone_gc.js",
+    "test:e2e": "node tests/test_e2e_sync.js",
+    "test": "node tests/test_chat_merger_v4_1.js && node tests/test_atomic_writer.js && node tests/test_tombstone_gc.js && node tests/test_e2e_sync.js"
+  },
+  "keywords": [
+    "sillytavern",
+    "sync",
+    "backup",
+    "realtime"
+  ],
+  "author": "",
+  "license": "MIT"
+}

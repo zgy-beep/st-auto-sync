@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  st-sync-hub:
+    build: .
+    container_name: st-auto-sync-hub
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    environment:
+      - PORT=8765
+      - DATA_DIR=/app/data
+    volumes:
+      - ./data:/app/data

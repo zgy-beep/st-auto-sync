@@ -1,0 +1,16 @@
+{
+  "name": "st-auto-sync-plugin",
+  "version": "1.0.0",
+  "description": "SillyTavern multi-device sync plugin and extension",
+  "main": "server/index.js",
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "keywords": [
+    "sillytavern-plugin",
+    "sillytavern-extension",
+    "sync"
+  ],
+  "author": "",
+  "license": "MIT"
+}

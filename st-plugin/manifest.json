@@ -1,0 +1,10 @@
+{
+  "display_name": "ST-Auto-Sync 多端同步",
+  "loading_order": 20,
+  "requires": [],
+  "optional": [],
+  "js": "public/index.js",
+  "css": "public/style.css",
+  "author": "ST-Auto-Sync Team",
+  "version": "1.0.0"
+}
