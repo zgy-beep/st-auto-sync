@@ -290,6 +290,10 @@ async function handleServerEvent(eventType, payload) {
       }
       break;
 
+    case 'cloud_profile_updated':
+      updateCloudProfileUI(payload);
+      break;
+
     case 'sync_error':
       updateIndicator({ isSyncing: false, lastError: payload.error });
       if (typeof window['toastr'] !== 'undefined') {
@@ -474,6 +478,183 @@ function renderVersionList(box, relPath, versions) {
   });
 }
 
+/**
+ * =============================================================================
+ * 云酒馆配置中心 (Cloud Profile Master)
+ * 解决云服务器部署下，新设备/新浏览器初次访问变空白、必须重新配置 API 的痛点。
+ * =============================================================================
+ */
+
+async function fetchCloudProfile() {
+  try {
+    const res = await fetch(`${API_BASE}/cloud-profile`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.profile || null;
+  } catch (err) {
+    console.warn('[ST-Auto-Sync] Failed to fetch cloud profile:', err);
+    return null;
+  }
+}
+
+/**
+ * 将云端母版配置灌入当前浏览器
+ */
+async function applyCloudProfile(profile, isAuto = false) {
+  if (!profile || !profile.settings) {
+    if (!isAuto) {
+      window['toastr']?.warning?.('云端服务器尚未固化配置母版，请先在已配好的设备上点击「固化当前配置为云端母版」', 'ST-Auto-Sync 云酒馆');
+    }
+    return false;
+  }
+
+  const s = profile.settings;
+  const ctx = getStContext();
+
+  // 1. 注入 localStorage (涵盖 SillyTavern 客户端缓存)
+  for (const [k, v] of Object.entries(s)) {
+    if (typeof v === 'string') {
+      localStorage.setItem(k, v);
+    } else if (typeof v === 'number' || typeof v === 'boolean') {
+      localStorage.setItem(k, String(v));
+    }
+  }
+
+  // 2. 注入 SillyTavern 运行时上下文与设置
+  if (ctx.settings && typeof ctx.settings === 'object') {
+    Object.assign(ctx.settings, s);
+    try { ctx.saveSettingsDebounced?.(); } catch (_) {}
+  }
+  if (profile.secrets && ctx.secrets && typeof ctx.secrets === 'object') {
+    Object.assign(ctx.secrets, profile.secrets);
+  }
+
+  // 3. 联动 DOM 控件（若已在页面渲染）
+  const setVal = (selector, val) => {
+    const el = document.querySelector(selector);
+    if (el && typeof val !== 'undefined' && val !== null) {
+      el.value = val;
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  };
+
+  setVal('#main_api', s.main_api);
+  setVal('#api_server_openai', s.api_server_openai);
+  setVal('#api_key_openai', s.api_key_openai);
+  setVal('#model_openai_select', s.model_openai || s.openai_model);
+  setVal('#settings_preset', s.preset);
+  setVal('#context_preset', s.context);
+  setVal('#instruct_preset', s.instruct);
+
+  const sum = profile.summary || {};
+  const msg = `已注入云端母版: ${sum.main_api || 'API'} (${sum.model || '模型'}) · 预设: ${sum.preset || '默认'}`;
+  window['toastr']?.success?.(msg, 'ST-Auto-Sync 云酒馆就绪');
+
+  // 触发 API 检测
+  setTimeout(() => {
+    document.querySelector('#api_button')?.click?.();
+    document.querySelector('#api_loading_openai')?.click?.();
+  }, 300);
+
+  return true;
+}
+
+/**
+ * 将当前浏览器的完整环境提取并固化为云端母版
+ */
+async function saveBrowserAsCloudProfile() {
+  const ctx = getStContext();
+  const s = ctx.settings || {};
+  const collected = { ...s };
+
+  // 补齐 localStorage 中存有的所有 API / 模型键值
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!k) continue;
+    if (
+      k.startsWith('api_') ||
+      k.startsWith('model_') ||
+      k.startsWith('custom_url_') ||
+      k === 'main_api' ||
+      k === 'preset' ||
+      k === 'context' ||
+      k === 'instruct' ||
+      k === 'openai_model' ||
+      k === 'claude_model'
+    ) {
+      collected[k] = localStorage.getItem(k);
+    }
+  }
+
+  const payload = {
+    profile: {
+      settings: collected,
+      secrets: ctx.secrets || null
+    },
+    deviceName: currentConfig?.deviceName || 'Web-Browser'
+  };
+
+  const res = await postJson('/cloud-profile/save', payload);
+  if (res.success && res.profile) {
+    const sum = res.profile.summary || {};
+    window['toastr']?.success?.(`云端母版已固化！包含 API: ${sum.main_api}, 模型: ${sum.model}, 预设: ${sum.preset}`, 'ST-Auto-Sync');
+    updateCloudProfileUI(res.profile);
+  } else {
+    throw new Error(res.error || '保存失败');
+  }
+}
+
+/**
+ * 新设备打开页面时自动检测并注水
+ */
+async function checkAndHydrateCloudProfile() {
+  if (localStorage.getItem('st_auto_sync_auto_hydrate') === 'false') {
+    return;
+  }
+
+  // 判断当前浏览器是否属于“空白环境”（未配置过 API 地址或 Key）
+  const hasConfig = !!localStorage.getItem('api_key_openai') ||
+                    !!localStorage.getItem('api_server_openai') ||
+                    !!(getStContext()?.settings?.api_server_openai);
+
+  if (!hasConfig) {
+    console.log('[ST-Auto-Sync] New browser/device detected without API settings. Hydrating from cloud profile...');
+    const profile = await fetchCloudProfile();
+    if (profile) {
+      await applyCloudProfile(profile, true);
+    }
+  }
+}
+
+function updateCloudProfileUI(profile) {
+  const badge = document.getElementById('st-sync-cloud-badge');
+  const summaryBox = document.getElementById('st-sync-cloud-summary');
+  if (!badge || !summaryBox) return;
+
+  if (profile && profile.summary) {
+    badge.textContent = '已固化母版';
+    badge.style.background = 'rgba(16, 185, 129, 0.2)';
+    badge.style.color = '#10b981';
+
+    const sum = profile.summary;
+    const timeStr = fmtTimestamp(profile.updated_at);
+    summaryBox.style.display = 'block';
+    summaryBox.innerHTML = `
+      <div><b>云端母版状态：</b>已生效</div>
+      <div>· 接口与模型: <code>${escapeHtml(sum.main_api || 'openai')}</code> (<code>${escapeHtml(sum.model || '未指定')}</code>)</div>
+      <div>· 预设与模板: <code>${escapeHtml(sum.preset || '默认')}</code> / <code>${escapeHtml(sum.instruct || '默认')}</code></div>
+      <div style="opacity: 0.75; font-size: 0.75rem; margin-top: 3px;">固化设备: ${escapeHtml(profile.updated_by || '未知')} · 更新于: ${timeStr}</div>
+    `;
+  } else {
+    badge.textContent = '未固化母版';
+    badge.style.background = 'rgba(255, 255, 255, 0.1)';
+    badge.style.color = 'inherit';
+    summaryBox.style.display = 'none';
+    summaryBox.innerHTML = '';
+  }
+}
+
 async function renderSettingsPanel() {
   mountSettingsPanel();
 
@@ -589,6 +770,25 @@ async function renderSettingsPanel() {
             <div id="st-sync-backups-btn" class="menu_button menu_button_icon">📋 查看备份版本</div>
           </div>
           <div id="st-sync-backups-panel" class="st-sync-backups-panel" style="display: none;"></div>
+        </div>
+
+        <div class="st-sync-notice st-sync-cloud-profile-box">
+          <div class="st-sync-cloud-header">
+            <b>☁️ 云酒馆配置中心 (新设备免配即聊)</b>
+            <span id="st-sync-cloud-badge" class="st-sync-badge">读取中…</span>
+          </div>
+          <small class="st-sync-help-text">
+            专为云端部署（VPS/服务器）打造：解决在电脑配好后、手机等新设备登入变白板的问题。把当前 API/Key/模型/预设固化为云端母版，任何新设备首次打开网页自动注水填充，直接开聊！
+          </small>
+          <div id="st-sync-cloud-summary" class="st-sync-cloud-summary" style="display: none;"></div>
+          <div class="st-sync-actions">
+            <div id="st-sync-cloud-save-btn" class="menu_button menu_button_icon">⭐ 固化当前设置为云端母版</div>
+            <div id="st-sync-cloud-load-btn" class="menu_button menu_button_icon">📥 从云端载入母版到当前设备</div>
+          </div>
+          <label class="checkbox_label" style="margin-top: 6px;">
+            <input type="checkbox" id="st-sync-auto-hydrate-chk" ${localStorage.getItem('st_auto_sync_auto_hydrate') !== 'false' ? 'checked' : ''} />
+            <span>新设备初次访问时自动注水激活</span>
+          </label>
         </div>
       </div>
     </div>
@@ -734,6 +934,45 @@ async function renderSettingsPanel() {
       box.innerHTML = `<small class="st-sync-help-text">读取失败: ${escapeHtml(e.message)}(检查 Hub 地址/Token 是否已保存)</small>`;
     }
   });
+
+  // 8. 云酒馆配置中心：固化当前配置为云端母版
+  document.getElementById('st-sync-cloud-save-btn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('st-sync-cloud-save-btn');
+    if (btn) btn.classList.add('disabled');
+    try {
+      await saveBrowserAsCloudProfile();
+    } catch (e) {
+      alert('固化失败: ' + e.message);
+    } finally {
+      if (btn) btn.classList.remove('disabled');
+    }
+  });
+
+  // 8.1 从云端载入母版到当前设备
+  document.getElementById('st-sync-cloud-load-btn')?.addEventListener('click', async () => {
+    const btn = document.getElementById('st-sync-cloud-load-btn');
+    if (btn) btn.classList.add('disabled');
+    try {
+      const profile = await fetchCloudProfile();
+      await applyCloudProfile(profile, false);
+    } catch (e) {
+      alert('载入失败: ' + e.message);
+    } finally {
+      if (btn) btn.classList.remove('disabled');
+    }
+  });
+
+  // 8.2 自动注水开关切换
+  document.getElementById('st-sync-auto-hydrate-chk')?.addEventListener('change', (e) => {
+    localStorage.setItem('st_auto_sync_auto_hydrate', e.target.checked ? 'true' : 'false');
+    window['toastr']?.info?.(
+      e.target.checked ? '已开启新设备初次访问自动注水' : '已关闭自动注水',
+      'ST-Auto-Sync 云酒馆'
+    );
+  });
+
+  // 异步获取并刷新云端母版状态
+  fetchCloudProfile().then((p) => updateCloudProfileUI(p));
 }
 
 /**
@@ -812,6 +1051,13 @@ function hookSillyTavernEvents() {
       mountSettingsPanel();
     } catch (_) { }
   }, 1200);
+
+  // 延迟检测并执行云酒馆配置自动注水（新设备打开即自动载入 API/Key/模型）
+  setTimeout(() => {
+    try {
+      checkAndHydrateCloudProfile();
+    } catch (_) { }
+  }, 800);
 
   // 定期拉取状态:页面刚打开时插件后端可能尚未连上 Hub,
   // 徽标只渲染一次会一直停在「未配置/未连接」,这里让它自己纠正过来。

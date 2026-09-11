@@ -261,3 +261,24 @@
   opacity: 0.5;
   pointer-events: none;
 }
+
+/* ---------- 云酒馆配置中心 ---------- */
+#st-sync-settings-panel .st-sync-cloud-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+#st-sync-settings-panel .st-sync-cloud-summary {
+  font-size: 0.8rem;
+  padding: 6px 8px;
+  margin-top: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px dashed rgba(127, 127, 127, 0.35);
+  border-radius: 4px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+

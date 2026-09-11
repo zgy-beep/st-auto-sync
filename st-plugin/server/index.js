@@ -1,8 +1,10 @@
 const path = require('node:path');
 const fs = require('node:fs');
 const SyncClient = require('./syncClient');
+const CloudProfileManager = require('./cloudProfileManager');
 
 let syncClientInstance = null;
+let cloudProfileManagerInstance = null;
 
 /**
  * SillyTavern 服务端插件元信息。
@@ -53,6 +55,8 @@ function init(router) {
 
   syncClientInstance = new SyncClient(stDataDir, pluginDir);
   syncClientInstance.start();
+
+  cloudProfileManagerInstance = new CloudProfileManager(stDataDir);
 
   // 维护 SSE 连接池给前端推送热重载信号
   const sseClients = new Set();
@@ -172,11 +176,55 @@ function init(router) {
     res.json({ success: true });
   });
 
+  // 6. 云酒馆配置中心：获取云端母版
+  router.get('/cloud-profile', (req, res) => {
+    try {
+      const profile = cloudProfileManagerInstance ? cloudProfileManagerInstance.getProfile() : null;
+      res.json({ success: true, profile });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 6.1 云酒馆配置中心：固化当前前端配置为云端母版
+  router.post('/cloud-profile/save', (req, res) => {
+    try {
+      if (!cloudProfileManagerInstance) {
+        throw new Error('CloudProfileManager not initialized');
+      }
+      const profile = cloudProfileManagerInstance.saveProfile(req.body.profile, {
+        deviceName: req.body.deviceName || req.headers['x-device-name'],
+        deviceId: req.body.deviceId || req.headers['x-device-id']
+      });
+      syncClientInstance.notifyUi('cloud_profile_updated', profile);
+      res.json({ success: true, profile });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 6.2 云酒馆配置中心：从服务端磁盘文件一键提取生成母版
+  router.post('/cloud-profile/capture', (req, res) => {
+    try {
+      if (!cloudProfileManagerInstance) {
+        throw new Error('CloudProfileManager not initialized');
+      }
+      const profile = cloudProfileManagerInstance.captureCurrentServerEnvironment({
+        deviceName: req.body.deviceName || 'Server-Direct'
+      });
+      syncClientInstance.notifyUi('cloud_profile_updated', profile);
+      res.json({ success: true, profile });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   console.log('[ST-Auto-Sync] Plugin server routes registered successfully.');
 }
 
 module.exports = {
   info,
   init,
-  getSyncClient: () => syncClientInstance
+  getSyncClient: () => syncClientInstance,
+  getCloudProfileManager: () => cloudProfileManagerInstance
 };
