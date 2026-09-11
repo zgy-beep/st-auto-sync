@@ -29,26 +29,33 @@
 中继服务极其轻量（内存占用不到 50MB），无论是在云服务器还是家庭 NAS（群晖、威联通、家庭存储等）都能轻松运行。
 
 #### 方式 A：Docker 一键启动（最推荐）
-在服务器上新建一个目录，创建 `docker-compose.yml` 文件：
-```yaml
-version: '3.8'
 
+在服务器上克隆本仓库，然后构建并启动（`hub-server/` 里已带好 `Dockerfile` 与 `docker-compose.yml`）：
+```bash
+git clone https://github.com/zgy-beep/st-auto-sync.git
+cd st-auto-sync/hub-server
+docker compose up -d --build
+```
+数据默认落在 `hub-server/data/`，`docker compose down` 不会删除数据。
+
+也可以自建一份 `docker-compose.yml`，**关键是构建本仓库的 `hub-server` 目录**：
+
+```yaml
 services:
   st-sync-hub:
-    image: node:20-alpine
+    build: ./hub-server
     container_name: st-sync-hub
     restart: unless-stopped
     ports:
       - "8765:8765"
+    environment:
+      - PORT=8765
+      - DATA_DIR=/app/data
     volumes:
       - ./data:/app/data
-    working_dir: /app
-    command: sh -c "npm install ws express cors && node -e \"const http=require('http'),express=require('express'),cors=require('cors'),{WebSocketServer}=require('ws');const app=express();app.use(cors());app.use(express.json({limit:'100mb'}));const server=http.createServer(app);const wss=new WebSocketServer({server,path:'/ws'});server.listen(8765,'0.0.0.0',()=>console.log('Hub Running!'));\""
 ```
-或者直接下载本仓库中的 `hub-server` 目录，执行：
-```bash
-docker compose up -d
-```
+
+> ⚠️ 请不要用 `image: node:20-alpine` + 内联 `node -e` 脚本的方式启动：那样只会跑起一个空的 HTTP/WS 壳，`/api/manifest`、`/api/files/*`、`/api/oplog`、`/api/devices` 等真实路由都不存在，插件连上也同步不了。
 
 #### 方式 B：用 Node.js 直接运行
 ```bash
@@ -58,6 +65,14 @@ npm start
 # 服务将在 8765 端口启动
 ```
 > 💡 **提示**：如果是在云服务器上运行，请在云后台的安全组/防火墙中放行 `8765` 端口。
+
+> 🔒 **公网部署建议**：插件会根据中继地址的协议自动选用 `ws://` 或 `wss://`（地址填 `https://` 就走 `wss://`），所以公网环境建议前面挂一层反向代理上 HTTPS，避免 Token 和聊天数据明文裸奔。以 Caddy 为例：
+> ```caddyfile
+> hub.example.com {
+>     reverse_proxy 127.0.0.1:8765
+> }
+> ```
+> Caddy 会自动签发证书并透传 WebSocket 升级，无需额外配置；此时插件里的中继地址填 `https://hub.example.com`。
 
 ---
 
