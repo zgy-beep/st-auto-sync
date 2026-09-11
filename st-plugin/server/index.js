@@ -5,6 +5,17 @@ const SyncClient = require('./syncClient');
 let syncClientInstance = null;
 
 /**
+ * SillyTavern 服务端插件元信息。
+ * ST 1.15+ 的插件加载器要求模块导出 info 对象（id/name/description 均为字符串），
+ * 否则会以 "Failed to load plugin module; plugin info not found" 拒绝加载。
+ */
+const info = {
+  id: 'st-auto-sync',
+  name: 'ST-Auto-Sync 多端同步',
+  description: 'Relays chats, characters, lorebooks and presets between SillyTavern devices through a self-hosted hub.',
+};
+
+/**
  * 探测 SillyTavern 的数据存储根目录
  */
 function detectStDataDir() {
@@ -117,6 +128,7 @@ function init(router) {
 }
 
 module.exports = {
+  info,
   init,
   getSyncClient: () => syncClientInstance
 };
