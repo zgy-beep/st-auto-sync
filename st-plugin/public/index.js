@@ -138,18 +138,47 @@ function createTopBarIndicator() {
 }
 
 /**
- * 刷新抽屉标题徽标 + 面板内状态徽标
+ * 统一的状态文案:抽屉徽标、面板徽标、顶栏都走这一个函数,避免两处说法不一致。
+ *   未配置 = 还没填 Hub 地址或 Token
+ *   未连接 = 填了但连不上(鼠标悬停看 lastError)
+ *   已连接 / 同步中
+ */
+function statusBadgeText(status = {}) {
+  const cfg = status.config || currentConfig || {};
+  const configured = !!(cfg.hubUrl && cfg.token);
+
+  if (status.isSyncing) return '同步中…';
+  if (status.connected) return '已连接';
+  if (!configured) return '未配置';
+  return '未连接';
+}
+
+function statusTooltip(status = {}) {
+  const cfg = status.config || currentConfig || {};
+  const text = statusBadgeText(status);
+  const details = [
+    `状态: ${text}`,
+    `Hub: ${cfg.hubUrl || '(未填写)'}`,
+    `设备: ${cfg.deviceName || '(未填写)'}`,
+  ];
+  if (status.lastError) details.push(`错误: ${status.lastError}`);
+  return details.join('\n');
+}
+
+/**
+ * 刷新抽屉标题徽标 + 面板内徽标(统一文案)
  */
 function refreshPanelBadges(status = {}) {
-  const drawerText = status.isSyncing ? '同步中…'
-    : status.connected ? '已连接'
-      : (status.lastError ? '未连接' : '未配置');
+  const text = statusBadgeText(status);
+  const tip = statusTooltip(status);
 
-  const drawerBadge = document.getElementById('st-sync-drawer-badge');
-  if (drawerBadge) drawerBadge.textContent = drawerText;
-
-  const cardBadge = document.getElementById('st-sync-badge-status');
-  if (cardBadge) cardBadge.textContent = status.connected ? '已连接' : '未连接';
+  for (const id of ['st-sync-drawer-badge', 'st-sync-badge-status']) {
+    const badge = document.getElementById(id);
+    if (badge) {
+      badge.textContent = text;
+      badge.title = tip;
+    }
+  }
 }
 
 /**
@@ -173,7 +202,8 @@ function updateIndicator(status) {
     text.textContent = `定时 (${status.config.intervalMinutes}m)`;
   } else {
     dot.classList.add('offline');
-    text.textContent = status.lastError ? '异常' : '未连接';
+    // 与抽屉/面板保持同一套文案:未配置 = 没填地址或 Token
+    text.textContent = status.lastError ? '异常' : statusBadgeText(status);
   }
 }
 
@@ -207,7 +237,10 @@ async function handleServerEvent(eventType, payload) {
     case 'connected':
     case 'status_changed':
     case 'presence_changed':
-      if (payload) updateIndicator(payload);
+      if (payload) {
+        updateIndicator(payload);
+        refreshPanelBadges(payload);
+      }
       break;
 
     case 'chat_updated':
@@ -342,14 +375,12 @@ async function renderSettingsPanel() {
 
   const cfg = currentConfig || {};
 
-  const drawerBadgeText = status.isSyncing ? '同步中…'
-    : status.connected ? '已连接'
-      : (status.lastError ? '未连接' : '未配置');
+  const badgeText = statusBadgeText(status);
 
   panel.innerHTML = `
     <div class="inline-drawer-toggle inline-drawer-header st-sync-drawer-header">
       <b class="st-sync-drawer-title">🔄 ST-Auto-Sync 多端同步</b>
-      <span id="st-sync-drawer-badge" class="st-sync-drawer-badge">${drawerBadgeText}</span>
+      <span id="st-sync-drawer-badge" class="st-sync-drawer-badge">${badgeText}</span>
       <div class="inline-drawer-icon fa-solid fa-circle-chevron-down"></div>
     </div>
 
@@ -357,7 +388,7 @@ async function renderSettingsPanel() {
       <div class="st-sync-card">
         <div class="st-sync-headline">
           <b>SillyTavern 多端自动同步</b>
-          <span class="st-sync-badge" id="st-sync-badge-status">${status.connected ? '已连接' : '未连接'}</span>
+          <span class="st-sync-badge" id="st-sync-badge-status">${badgeText}</span>
         </div>
 
         <label for="st-sync-hub-url">Hub 服务端地址</label>
@@ -602,4 +633,22 @@ function hookSillyTavernEvents() {
       mountSettingsPanel();
     } catch (_) { }
   }, 1200);
+
+  // 定期拉取状态:页面刚打开时插件后端可能尚未连上 Hub,
+  // 徽标只渲染一次会一直停在「未配置/未连接」,这里让它自己纠正过来。
+  const pollStatus = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/status`);
+      if (!res.ok) return;
+      const status = await res.json();
+      currentConfig = status.config || currentConfig;
+      updateIndicator(status);
+      refreshPanelBadges(status);
+    } catch (_) { }
+  };
+
+  pollStatus();
+  setInterval(() => {
+    if (!document.hidden) pollStatus();
+  }, 10000);
 })();
