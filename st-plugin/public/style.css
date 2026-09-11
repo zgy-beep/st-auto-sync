@@ -49,11 +49,40 @@
   to { opacity: 1; transform: scale(1.2); }
 }
 
-/* 扩展设置面板容器 */
+/* 扩展设置面板容器(用 ST 标准 inline-drawer 结构,和「小说连载」等扩展一致) */
 .st-sync-settings-container {
-  padding: 12px;
   font-family: inherit;
   color: var(--SmartThemeBodyColor, #e0e0e0);
+}
+
+/* 抽屉标题栏:名称 + 状态徽标 + 折叠箭头 */
+.st-sync-drawer-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.st-sync-drawer-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-sync-drawer-badge {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--SmartThemeBodyColor, #e0e0e0);
+  white-space: nowrap;
+}
+
+.inline-drawer-content .st-sync-settings-container,
+.st-sync-settings-container .inline-drawer-content {
+  padding: 12px;
 }
 
 .st-sync-card {

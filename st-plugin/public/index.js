@@ -63,11 +63,18 @@ function createTopBarIndicator() {
   `;
 
   indicator.addEventListener('click', () => {
-    // 点击快速跳转到扩展设置抽屉
+    // 点击快速跳转到扩展设置抽屉,并把本插件那一格展开
     const extButton = document.querySelector('#extensions-button') || document.querySelector('#nav-toggle-extensions');
     if (extButton) extButton.click();
+
     const panel = document.getElementById('st-sync-settings-panel');
-    if (panel) panel.scrollIntoView({ behavior: 'smooth' });
+    if (!panel) return;
+
+    const content = panel.querySelector(':scope > .inline-drawer-content');
+    if (content && content.style.display === 'none') {
+      panel.querySelector(':scope > .inline-drawer-toggle')?.click();
+    }
+    panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
   });
 
   container.appendChild(indicator);
@@ -212,7 +219,8 @@ function ensurePanelElement() {
   if (!settingsPanelEl) {
     settingsPanelEl = document.createElement('div');
     settingsPanelEl.id = 'st-sync-settings-panel';
-    settingsPanelEl.className = 'st-sync-settings-container';
+    // 与 ST 其它扩展一致:用 inline-drawer 结构,才能在抽屉里显示为可折叠条目
+    settingsPanelEl.className = 'inline-drawer st-sync-settings-container';
   }
   return settingsPanelEl;
 }
@@ -262,7 +270,18 @@ async function renderSettingsPanel() {
 
   const cfg = currentConfig || {};
 
+  const drawerBadgeText = status.isSyncing ? '同步中…'
+    : status.connected ? '已连接'
+      : (status.lastError ? '未连接' : '未配置');
+
   panel.innerHTML = `
+    <div class="inline-drawer-toggle inline-drawer-header st-sync-drawer-header">
+      <b class="st-sync-drawer-title">🔄 ST-Auto-Sync 多端同步</b>
+      <span id="st-sync-drawer-badge" class="st-sync-drawer-badge">${drawerBadgeText}</span>
+      <div class="inline-drawer-icon fa-solid fa-circle-chevron-down"></div>
+    </div>
+
+    <div class="inline-drawer-content" style="display: none;">
     <div class="st-sync-card">
       <div class="st-sync-card-title">
         <span>🔄 SillyTavern 多端自动同步</span>
@@ -332,6 +351,7 @@ async function renderSettingsPanel() {
         <button id="st-sync-save-btn" class="st-sync-btn st-sync-btn-primary">💾 保存并应用配置</button>
         <button id="st-sync-now-btn" class="st-sync-btn st-sync-btn-secondary">🔄 立即手动同步</button>
       </div>
+    </div>
     </div>
   `;
 
