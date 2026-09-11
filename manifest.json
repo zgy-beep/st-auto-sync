@@ -1,0 +1,13 @@
+{
+  "display_name": "ST-Auto-Sync 多端同步",
+  "loading_order": 20,
+  "requires": [],
+  "optional": [],
+  "js": "st-plugin/public/index.js",
+  "css": "st-plugin/public/style.css",
+  "author": "zgy-beep",
+  "version": "1.0.0",
+  "homePage": "https://github.com/zgy-beep/st-auto-sync",
+  "description": "多端自动同步：聊天记录 / 角色卡 / 世界书 / 预设，电脑与手机无缝接力。装在酒馆时只需本仓库（前端面板），服务端 Hub 请另见 hub-server/。",
+  "auto_update": true
+}

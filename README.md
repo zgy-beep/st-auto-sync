@@ -80,6 +80,26 @@ npm start
 
 > ⚠️ **要装两个地方**：SillyTavern 的「服务端插件」机制只负责注册 `/api/plugins/<id>/...` 接口，**不会**把插件里的 `public/` 前端资源注入到页面。所以前端面板必须同时作为「第三方扩展」放一份，否则拼图面板里看不到这个插件。
 
+**方式一（推荐）：一条命令装好两半**
+
+```bash
+git clone https://github.com/zgy-beep/st-auto-sync.git
+cd st-auto-sync
+bash install.sh /path/to/SillyTavern      # 不填路径则用当前目录
+```
+脚本会：装服务端 → `plugins/st-auto-sync/` + `npm install`；装前端 → `public/scripts/extensions/third-party/st-auto-sync/`。重复执行即为更新，不会动酒馆数据。
+
+**方式二：在酒馆界面里从 URL 安装前端**
+
+拼接图图标 → 扩展面板 → **Install extension**，填：
+```text
+https://github.com/zgy-beep/st-auto-sync
+```
+仓库根目录带 `manifest.json`，SillyTavern 可以直接识别并加载（`js` 指向 `st-plugin/public/index.js`）。
+但**服务端那一半界面里装不了**（ST 的安装功能只管第三方扩展），仍要执行 `bash install.sh` 或手动复制。
+
+**方式三：完全手动**
+
 在需要同步的每台设备（电脑、笔记本、手机 Termux）上：
 
 **① 服务端部分（提供 API 接口）**
