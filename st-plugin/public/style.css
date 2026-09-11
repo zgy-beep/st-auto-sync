@@ -182,3 +182,18 @@
   background: rgba(255, 255, 255, 0.1);
   margin-left: 6px;
 }
+
+.st-sync-help-text {
+  font-size: 0.75rem;
+  opacity: 0.75;
+  margin-top: 3px;
+  line-height: 1.35;
+}
+
+.st-sync-highlight-box {
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}

@@ -43,8 +43,20 @@ class SyncClient {
       token: '',
       mode: 'realtime', // 'realtime' | 'interval' | 'manual'
       intervalMinutes: 10,
-      syncCategories: ['chats', 'characters', 'worlds', 'context', 'instruct'],
-      syncSettings: false,
+      syncCategories: [
+        'chats',
+        'characters',
+        'worlds',
+        'context',
+        'instruct',
+        'personas',
+        'OpenAI Settings',
+        'textgen_settings',
+        'kobold_settings',
+        'novelai_settings',
+        'presets'
+      ],
+      syncEnvironment: true, // 核心体验：开箱即聊免二次配置（API/Key/模型/预设全自动同步）
       deviceId: 'dev_' + Math.random().toString(36).slice(2, 10),
       deviceName: process.platform === 'win32' ? 'PC-Windows' : 'Mobile-Device'
     };
@@ -402,7 +414,7 @@ class SyncClient {
       // 1. 生成本地清单
       const localManifest = this.manifestHelper.generateLocalManifest({
         syncCategories: this.config.syncCategories,
-        syncSettings: this.config.syncSettings
+        syncEnvironment: this.config.syncEnvironment !== false
       });
 
       // 2. 向 Hub 请求 Manifest Diff
@@ -511,10 +523,24 @@ class SyncClient {
       }
     }
 
+    // 开箱即聊：如果是 settings.json，将远端同步的 API/模型/参数打补丁注入本地，完整保留本地 UI 主题
+    let finalWriteBuffer = remoteBuffer;
+    if (relPath === 'settings.json' && fs.existsSync(localPath)) {
+      try {
+        const localSettings = JSON.parse(fs.readFileSync(localPath, 'utf8'));
+        const remoteSanitized = JSON.parse(remoteBuffer.toString('utf8'));
+        const patched = ManifestHelper.patchLocalSettings(localSettings, remoteSanitized);
+        finalWriteBuffer = Buffer.from(JSON.stringify(patched, null, 2), 'utf8');
+        console.log('[SyncClient] Successfully patched API/Preset environment into local settings.json');
+      } catch (err) {
+        console.warn('[SyncClient] Failed to patch local settings.json, using authoritative remote:', err.message);
+      }
+    }
+
     // 使用 atomicWriter 执行原子排他写入
     await atomicWriter.safeWrite(
       localPath,
-      remoteBuffer,
+      finalWriteBuffer,
       baseHashBefore,
       (currentLocalBuf, hubAuthoritativeBuf) => {
         // 若在下载期间本地刚有新打字落盘：进行纯追加保护性合并
@@ -543,8 +569,17 @@ class SyncClient {
     const localPath = path.join(this.stDataDir, relPath);
     if (!fs.existsSync(localPath)) return;
 
-    const buffer = fs.readFileSync(localPath);
+    let buffer = fs.readFileSync(localPath);
     const stat = fs.statSync(localPath);
+
+    // 开箱即聊：上传 settings.json 时，仅上传白名单过滤后的核心 API 与预设，不上传本地主题
+    if (relPath === 'settings.json') {
+      try {
+        const raw = JSON.parse(buffer.toString('utf8'));
+        const sanitized = ManifestHelper.sanitizeSettings(raw);
+        buffer = Buffer.from(JSON.stringify(sanitized, null, 2), 'utf8');
+      } catch (_) {}
+    }
 
     await this.fetchApi('/api/files/upload', 'POST', {
       path: relPath,

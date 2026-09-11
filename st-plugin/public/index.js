@@ -252,14 +252,24 @@ async function renderSettingsPanel() {
         <input type="number" id="st-sync-interval-val" class="st-sync-input" min="1" max="1440" value="${cfg.intervalMinutes || 10}" />
       </div>
 
+      <div class="st-sync-form-group st-sync-highlight-box">
+        <label class="st-sync-checkbox-item" style="font-weight: 600;">
+          <input type="checkbox" id="sync-env" ${cfg.syncEnvironment !== false ? 'checked' : ''} />
+          🚀 开箱即聊环境同步 (API / Key / 模型 / 预设)
+        </label>
+        <div class="st-sync-help-text">
+          在多端自动同步 API 密钥 (secrets.json)、模型选型、反代地址与生成预设。新设备一键即聊，无需繁琐重配；智能保留手机与电脑各自独立的 UI 主题与窗口布局。
+        </div>
+      </div>
+
       <div class="st-sync-form-group">
-        <label>同步内容选择：</label>
+        <label>同步数据类别：</label>
         <div class="st-sync-checkbox-grid">
-          <label class="st-sync-checkbox-item"><input type="checkbox" id="sync-cat-chats" checked disabled /> 聊天记录 (增量)</label>
-          <label class="st-sync-checkbox-item"><input type="checkbox" id="sync-cat-chars" ${(cfg.syncCategories || []).includes('characters') ? 'checked' : ''} /> 角色卡</label>
-          <label class="st-sync-checkbox-item"><input type="checkbox" id="sync-cat-worlds" ${(cfg.syncCategories || []).includes('worlds') ? 'checked' : ''} /> 世界书</label>
-          <label class="st-sync-checkbox-item"><input type="checkbox" id="sync-cat-presets" ${(cfg.syncCategories || []).includes('context') ? 'checked' : ''} /> 预设与模板</label>
-          <label class="st-sync-checkbox-item"><input type="checkbox" id="sync-cat-settings" ${cfg.syncSettings ? 'checked' : ''} /> 全局设置 (可选)</label>
+          <label class="st-sync-checkbox-item"><input type="checkbox" id="sync-cat-chats" checked disabled /> 聊天记录 (无损合并)</label>
+          <label class="st-sync-checkbox-item"><input type="checkbox" id="sync-cat-chars" ${(cfg.syncCategories || []).includes('characters') ? 'checked' : ''} /> 角色卡与头像</label>
+          <label class="st-sync-checkbox-item"><input type="checkbox" id="sync-cat-worlds" ${(cfg.syncCategories || []).includes('worlds') ? 'checked' : ''} /> 世界书 (Lorebooks)</label>
+          <label class="st-sync-checkbox-item"><input type="checkbox" id="sync-cat-presets" ${(cfg.syncCategories || []).includes('presets') || (cfg.syncCategories || []).includes('context') ? 'checked' : ''} /> 提示词与预设包</label>
+          <label class="st-sync-checkbox-item"><input type="checkbox" id="sync-cat-personas" ${(cfg.syncCategories || []).includes('personas') ? 'checked' : ''} /> 个人人设 (Personas)</label>
         </div>
       </div>
 
@@ -286,14 +296,25 @@ async function renderSettingsPanel() {
     const deviceName = document.getElementById('st-sync-dev-name').value.trim();
     const mode = document.querySelector('input[name="st-sync-mode"]:checked')?.value || 'realtime';
     const intervalMinutes = parseInt(document.getElementById('st-sync-interval-val').value, 10) || 10;
+    const syncEnvironment = document.getElementById('sync-env').checked;
 
     const syncCategories = ['chats'];
     if (document.getElementById('sync-cat-chars').checked) syncCategories.push('characters');
     if (document.getElementById('sync-cat-worlds').checked) syncCategories.push('worlds');
     if (document.getElementById('sync-cat-presets').checked) {
-      syncCategories.push('context', 'instruct');
+      syncCategories.push(
+        'context',
+        'instruct',
+        'OpenAI Settings',
+        'textgen_settings',
+        'kobold_settings',
+        'novelai_settings',
+        'presets'
+      );
     }
-    const syncSettings = document.getElementById('sync-cat-settings').checked;
+    if (document.getElementById('sync-cat-personas').checked) {
+      syncCategories.push('personas');
+    }
 
     const newCfg = {
       hubUrl,
@@ -302,7 +323,7 @@ async function renderSettingsPanel() {
       mode,
       intervalMinutes,
       syncCategories,
-      syncSettings
+      syncEnvironment
     };
 
     try {
