@@ -176,10 +176,10 @@ function init(router) {
     res.json({ success: true });
   });
 
-  // 6. 云酒馆配置中心：获取云端母版
+  // 6. 云酒馆配置中心：获取云端母版（脱敏下发，杜绝明文密钥泄漏给前端）
   router.get('/cloud-profile', (req, res) => {
     try {
-      const profile = cloudProfileManagerInstance ? cloudProfileManagerInstance.getProfile() : null;
+      const profile = cloudProfileManagerInstance ? cloudProfileManagerInstance.getProfile({ forClient: true }) : null;
       res.json({ success: true, profile });
     } catch (err) {
       res.status(500).json({ success: false, error: err.message });
@@ -192,12 +192,13 @@ function init(router) {
       if (!cloudProfileManagerInstance) {
         throw new Error('CloudProfileManager not initialized');
       }
-      const profile = cloudProfileManagerInstance.saveProfile(req.body.profile, {
+      const rawProfile = cloudProfileManagerInstance.saveProfile(req.body.profile, {
         deviceName: req.body.deviceName || req.headers['x-device-name'],
         deviceId: req.body.deviceId || req.headers['x-device-id']
       });
-      syncClientInstance.notifyUi('cloud_profile_updated', profile);
-      res.json({ success: true, profile });
+      const clientSafeProfile = cloudProfileManagerInstance.sanitizeForClient(rawProfile);
+      syncClientInstance.notifyUi('cloud_profile_updated', clientSafeProfile);
+      res.json({ success: true, profile: clientSafeProfile });
     } catch (err) {
       res.status(500).json({ success: false, error: err.message });
     }
@@ -209,11 +210,12 @@ function init(router) {
       if (!cloudProfileManagerInstance) {
         throw new Error('CloudProfileManager not initialized');
       }
-      const profile = cloudProfileManagerInstance.captureCurrentServerEnvironment({
+      const rawProfile = cloudProfileManagerInstance.captureCurrentServerEnvironment({
         deviceName: req.body.deviceName || 'Server-Direct'
       });
-      syncClientInstance.notifyUi('cloud_profile_updated', profile);
-      res.json({ success: true, profile });
+      const clientSafeProfile = cloudProfileManagerInstance.sanitizeForClient(rawProfile);
+      syncClientInstance.notifyUi('cloud_profile_updated', clientSafeProfile);
+      res.json({ success: true, profile: clientSafeProfile });
     } catch (err) {
       res.status(500).json({ success: false, error: err.message });
     }

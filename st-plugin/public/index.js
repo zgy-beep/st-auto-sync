@@ -499,6 +499,7 @@ async function fetchCloudProfile() {
 
 /**
  * 将云端母版配置灌入当前浏览器
+ * 严格执行安全过滤：绝不将明文私钥落盘至浏览器的 localStorage 或 DOM，直接利用服务端反代请求
  */
 async function applyCloudProfile(profile, isAuto = false) {
   if (!profile || !profile.settings) {
@@ -511,8 +512,12 @@ async function applyCloudProfile(profile, isAuto = false) {
   const s = profile.settings;
   const ctx = getStContext();
 
-  // 1. 注入 localStorage (涵盖 SillyTavern 客户端缓存)
+  // 1. 注入 localStorage (仅注入模型、预设等非敏感项，严格过滤明文密钥)
   for (const [k, v] of Object.entries(s)) {
+    const lower = k.toLowerCase();
+    if (lower.startsWith('api_key') || lower.includes('secret') || lower.includes('token') || lower.includes('password')) {
+      continue;
+    }
     if (typeof v === 'string') {
       localStorage.setItem(k, v);
     } else if (typeof v === 'number' || typeof v === 'boolean') {
@@ -520,13 +525,17 @@ async function applyCloudProfile(profile, isAuto = false) {
     }
   }
 
-  // 2. 注入 SillyTavern 运行时上下文与设置
-  if (ctx.settings && typeof ctx.settings === 'object') {
-    Object.assign(ctx.settings, s);
+  // 2. 注入 SillyTavern 运行时上下文与设置（过滤掉敏感字段）
+  if (ctx && ctx.settings && typeof ctx.settings === 'object') {
+    const safeSettings = { ...s };
+    for (const k of Object.keys(safeSettings)) {
+      const lower = k.toLowerCase();
+      if (lower.startsWith('api_key') || lower.includes('secret') || lower.includes('token') || lower.includes('password')) {
+        delete safeSettings[k];
+      }
+    }
+    Object.assign(ctx.settings, safeSettings);
     try { ctx.saveSettingsDebounced?.(); } catch (_) {}
-  }
-  if (profile.secrets && ctx.secrets && typeof ctx.secrets === 'object') {
-    Object.assign(ctx.secrets, profile.secrets);
   }
 
   // 3. 联动 DOM 控件（若已在页面渲染）
@@ -541,11 +550,16 @@ async function applyCloudProfile(profile, isAuto = false) {
 
   setVal('#main_api', s.main_api);
   setVal('#api_server_openai', s.api_server_openai);
-  setVal('#api_key_openai', s.api_key_openai);
+  // 注意：云端酒馆直接使用服务端 secrets.json 进行后端安全代理，无需在前端输入框反显明文私钥
   setVal('#model_openai_select', s.model_openai || s.openai_model);
   setVal('#settings_preset', s.preset);
   setVal('#context_preset', s.context);
   setVal('#instruct_preset', s.instruct);
+
+  // 标记本机已完成注水，避免每次页面刷新反复覆盖用户自定义微调
+  try {
+    localStorage.setItem('st_auto_sync_hydrated_v1', 'true');
+  } catch (_) {}
 
   const sum = profile.summary || {};
   const msg = `已注入云端母版: ${sum.main_api || 'API'} (${sum.model || '模型'}) · 预设: ${sum.preset || '默认'}`;
@@ -565,7 +579,7 @@ async function applyCloudProfile(profile, isAuto = false) {
  */
 async function saveBrowserAsCloudProfile() {
   const ctx = getStContext();
-  const s = ctx.settings || {};
+  const s = (ctx && ctx.settings) ? ctx.settings : {};
   const collected = { ...s };
 
   // 补齐 localStorage 中存有的所有 API / 模型键值
@@ -590,7 +604,7 @@ async function saveBrowserAsCloudProfile() {
   const payload = {
     profile: {
       settings: collected,
-      secrets: ctx.secrets || null
+      secrets: (ctx && ctx.secrets) ? ctx.secrets : null
     },
     deviceName: currentConfig?.deviceName || 'Web-Browser'
   };
@@ -599,6 +613,7 @@ async function saveBrowserAsCloudProfile() {
   if (res.success && res.profile) {
     const sum = res.profile.summary || {};
     window['toastr']?.success?.(`云端母版已固化！包含 API: ${sum.main_api}, 模型: ${sum.model}, 预设: ${sum.preset}`, 'ST-Auto-Sync');
+    localStorage.setItem('st_auto_sync_hydrated_v1', 'true');
     updateCloudProfileUI(res.profile);
   } else {
     throw new Error(res.error || '保存失败');
@@ -607,23 +622,38 @@ async function saveBrowserAsCloudProfile() {
 
 /**
  * 新设备打开页面时自动检测并注水
+ * 修复：通过 st_auto_sync_hydrated_v1 杜绝每次页面刷新都重复注水覆盖用户修改的严重问题
  */
 async function checkAndHydrateCloudProfile() {
   if (localStorage.getItem('st_auto_sync_auto_hydrate') === 'false') {
     return;
   }
 
-  // 判断当前浏览器是否属于“空白环境”（未配置过 API 地址或 Key）
+  // 1. 已注水标记检查：防止每次刷新页面重复注水，冲垮手机/当前设备运行时的微调设置
+  if (localStorage.getItem('st_auto_sync_hydrated_v1') === 'true') {
+    return;
+  }
+
+  // 2. 检测当前设备是否已自行配置过（已有配置则不自动覆盖，仅补齐已注水标记）
+  const ctx = getStContext();
+  const ctxSettings = ctx?.settings || {};
   const hasConfig = !!localStorage.getItem('api_key_openai') ||
                     !!localStorage.getItem('api_server_openai') ||
-                    !!(getStContext()?.settings?.api_server_openai);
+                    !!localStorage.getItem('main_api') ||
+                    !!ctxSettings.api_server_openai ||
+                    !!(ctxSettings.main_api && ctxSettings.main_api !== 'disabled');
 
-  if (!hasConfig) {
-    console.log('[ST-Auto-Sync] New browser/device detected without API settings. Hydrating from cloud profile...');
-    const profile = await fetchCloudProfile();
-    if (profile) {
-      await applyCloudProfile(profile, true);
-    }
+  if (hasConfig) {
+    localStorage.setItem('st_auto_sync_hydrated_v1', 'true');
+    return;
+  }
+
+  // 3. 空白新设备：从云端拉取母版注水
+  console.log('[ST-Auto-Sync] New browser/device detected without settings. Hydrating from cloud profile...');
+  const profile = await fetchCloudProfile();
+  if (profile && profile.settings) {
+    await applyCloudProfile(profile, true);
+    localStorage.setItem('st_auto_sync_hydrated_v1', 'true');
   }
 }
 
@@ -1018,6 +1048,13 @@ function hookSillyTavernEvents() {
 
 // 扩展自启动入口
 (function initExtension() {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return;
+  }
+  if (window.__ST_TEST_SKIP_INIT) {
+    return;
+  }
+
   console.log('[ST-Auto-Sync] Initializing ST-Auto-Sync client extension...');
 
   // 面板挂载优先且独立:任何一步出错都不能连累它
@@ -1083,3 +1120,13 @@ function hookSillyTavernEvents() {
     }
   });
 })();
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    applyCloudProfile,
+    saveBrowserAsCloudProfile,
+    checkAndHydrateCloudProfile,
+    fetchCloudProfile,
+    updateCloudProfileUI
+  };
+}
