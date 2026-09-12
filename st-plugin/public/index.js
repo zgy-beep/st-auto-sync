@@ -718,6 +718,12 @@ async function renderSettingsPanel() {
           <span class="st-sync-badge" id="st-sync-badge-status">${badgeText}</span>
         </div>
 
+        <div class="st-sync-group-title">
+          <span>① 多端同步</span>
+          <span class="st-sync-dep-badge st-sync-dep-hub">需要 Hub 地址 + Token</span>
+        </div>
+        <small class="st-sync-help-text">下面这组是"多设备之间同步数据"的配置,必须填 Hub 地址和 Token 才能生效。</small>
+
         <label for="st-sync-hub-url">Hub 服务端地址</label>
         <input type="text" id="st-sync-hub-url" class="text_pole" placeholder="http://你的服务器:8765" value="${cfg.hubUrl || ''}" />
         <small class="st-sync-help-text">填 Hub 地址;用 https:// 会自动走 wss 加密连接。</small>
@@ -788,10 +794,13 @@ async function renderSettingsPanel() {
           <div id="st-sync-now-btn" class="menu_button menu_button_icon">🔄 立即手动同步</div>
         </div>
 
+        <hr class="st-sync-divider" />
+
         <div class="st-sync-notice">
-          <label class="checkbox_label">
-            <span><b>🗂 备份与恢复</b></span>
-          </label>
+          <div class="st-sync-group-title">
+            <span>② 备份与恢复</span>
+            <span class="st-sync-dep-badge st-sync-dep-hub">需要 Hub</span>
+          </div>
           <small class="st-sync-help-text">
             Hub 会在每次覆盖/删除前自动留存旧版本(每文件最多 20 份)。这里可以查看历史版本并回滚,或一键以 Hub 为准恢复本机。
             <br />注意:恢复 <code>settings.json</code> / <code>secrets.json</code> 这类环境文件后需要重启酒馆才生效(酒馆启动时把设置读进内存,运行中写文件可能被内存里的旧值覆盖回去)。
@@ -803,13 +812,16 @@ async function renderSettingsPanel() {
           <div id="st-sync-backups-panel" class="st-sync-backups-panel" style="display: none;"></div>
         </div>
 
+        <hr class="st-sync-divider" />
+
         <div class="st-sync-notice st-sync-cloud-profile-box">
           <div class="st-sync-cloud-header">
-            <b>☁️ 云酒馆配置中心 (新设备免配即聊)</b>
+            <b>③ ☁️ 云酒馆配置中心</b>
+            <span class="st-sync-dep-badge st-sync-dep-local">无需 Hub</span>
             <span id="st-sync-cloud-badge" class="st-sync-badge">读取中…</span>
           </div>
           <small class="st-sync-help-text">
-            专为云端部署（VPS/服务器）打造：解决在电脑配好后、手机等新设备登入变白板的问题。把当前 API/Key/模型/预设固化为云端母版，任何新设备首次打开网页自动注水填充，直接开聊！
+            专为云端部署(VPS/服务器)打造:解决在电脑配好后、手机等新设备登入变白板的问题。用的是**本机插件的服务端接口 + 服务器本地存储**,<b>不需要 Hub 地址、Token 或隧道</b>,和上面的同步/备份功能互不影响。
           </small>
           <div id="st-sync-cloud-summary" class="st-sync-cloud-summary" style="display: none;"></div>
           <div class="st-sync-actions">

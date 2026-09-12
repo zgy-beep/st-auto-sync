@@ -267,8 +267,53 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 4px;
+}
+
+/* ---------- 功能分区:把"需要 Hub"和"不依赖 Hub"的功能明确区分开 ---------- */
+#st-sync-settings-panel .st-sync-group-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 4px 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+#st-sync-settings-panel .st-sync-dep-badge {
+  font-size: 0.7rem;
+  font-weight: 400;
+  line-height: 1.4;
+  padding: 1px 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(127, 127, 127, 0.35);
+  opacity: 0.9;
+  white-space: nowrap;
+}
+
+#st-sync-settings-panel .st-sync-dep-hub {
+  color: #60a5fa;
+  border-color: rgba(96, 165, 250, 0.5);
+  background: rgba(96, 165, 250, 0.08);
+}
+
+#st-sync-settings-panel .st-sync-dep-local {
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.5);
+  background: rgba(52, 211, 153, 0.08);
+}
+
+#st-sync-settings-panel .st-sync-divider {
+  border: 0;
+  border-top: 1px solid rgba(127, 127, 127, 0.25);
+  margin: 12px 0;
+}
+
+#st-sync-settings-panel .st-sync-cloud-profile-box {
+  border-left: 3px solid rgba(52, 211, 153, 0.55);
 }
 
 #st-sync-settings-panel .st-sync-cloud-summary {

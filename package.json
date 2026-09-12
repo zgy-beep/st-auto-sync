@@ -12,9 +12,10 @@
     "test:cloud": "node tests/test_cloud_profile.js",
     "test:e2e": "node tests/test_e2e_sync.js",
     "test:versions": "node tests/test_version_history.js",
-    "test": "node tests/test_chat_merger.js && node tests/test_atomic_writer.js && node tests/test_tombstone_gc.js && node tests/test_environment_sync.js && node tests/test_optimizations.js && node tests/test_cloud_profile.js && node tests/test_cloud_fixes.js && node tests/test_cloud_hydration.js && node tests/test_e2e_sync.js && node tests/test_version_history.js",
+    "test": "node tests/test_chat_merger.js && node tests/test_atomic_writer.js && node tests/test_tombstone_gc.js && node tests/test_environment_sync.js && node tests/test_optimizations.js && node tests/test_cloud_profile.js && node tests/test_cloud_fixes.js && node tests/test_cloud_hydration.js && node tests/test_panel_sections.js && node tests/test_e2e_sync.js && node tests/test_version_history.js",
     "test:fixes": "node tests/test_cloud_fixes.js",
-    "test:hydration": "node tests/test_cloud_hydration.js"
+    "test:hydration": "node tests/test_cloud_hydration.js",
+    "test:panel": "node tests/test_panel_sections.js"
   },
   "keywords": [
     "sillytavern",
