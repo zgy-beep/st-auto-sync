@@ -356,9 +356,11 @@ class StorageManager {
 
   /**
    * 清理超过保留期(默认 60 天)的历史快照及空目录
+   * 注意:这里**不创建**目录,也不依赖 getUserVersionsDir()(它带 mkdir),
+   * 否则 users/ 下混进文件时本方法会抛 ENOTDIR,把整个租户循环拖死。
    */
   cleanExpiredVersions(userKey, maxAgeMs = 60 * 24 * 60 * 60 * 1000) {
-    const root = this.getUserVersionsDir(userKey);
+    const root = path.join(this.baseDataDir, 'users', userKey, '.versions');
     if (!fs.existsSync(root)) return 0;
 
     let removed = 0;

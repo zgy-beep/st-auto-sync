@@ -388,17 +388,37 @@ setInterval(() => {
   }
 }, 30000);
 
-// 定期历史快照过期清理 (每 12 小时)
-setInterval(() => {
-  try {
-    const usersDir = path.join(DATA_DIR, 'users');
-    if (fs.existsSync(usersDir)) {
-      for (const uKey of fs.readdirSync(usersDir)) {
-        storageManager.cleanExpiredVersions(uKey);
-      }
+// 定期历史快照过期清理 (每 12 小时);启动时先跑一次,不必等 12 小时
+function runSnapshotGc() {
+  const usersDir = path.join(DATA_DIR, 'users');
+  if (!fs.existsSync(usersDir)) return;
+
+  let scanned = 0;
+  let removed = 0;
+  for (const entry of fs.readdirSync(usersDir)) {
+    // 跳过 users/ 下的杂散文件(否则 cleanExpiredVersions 会抛 ENOTDIR 并中断整轮清理)
+    let stat = null;
+    try {
+      stat = fs.statSync(path.join(usersDir, entry));
+    } catch (_) {
+      continue;
     }
-  } catch (_) {}
-}, 12 * 3600 * 1000);
+    if (!stat.isDirectory()) continue;
+
+    try {
+      removed += storageManager.cleanExpiredVersions(entry);
+      scanned += 1;
+    } catch (err) {
+      console.warn(`[Hub Backup] Snapshot GC failed for tenant ${entry}: ${err.message}`);
+    }
+  }
+  if (removed > 0) {
+    console.log(`[Hub Backup] Snapshot GC: removed ${removed} expired version(s) across ${scanned} tenant(s).`);
+  }
+}
+
+setInterval(runSnapshotGc, 12 * 3600 * 1000);
+setTimeout(runSnapshotGc, 5000);
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`===================================================`);

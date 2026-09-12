@@ -794,6 +794,7 @@ async function renderSettingsPanel() {
           </label>
           <small class="st-sync-help-text">
             Hub 会在每次覆盖/删除前自动留存旧版本(每文件最多 20 份)。这里可以查看历史版本并回滚,或一键以 Hub 为准恢复本机。
+            <br />注意:恢复 <code>settings.json</code> / <code>secrets.json</code> 这类环境文件后需要重启酒馆才生效(酒馆启动时把设置读进内存,运行中写文件可能被内存里的旧值覆盖回去)。
           </small>
           <div class="st-sync-actions">
             <div id="st-sync-restore-btn" class="menu_button menu_button_icon">⬇️ 从 Hub 全量恢复</div>

@@ -111,13 +111,27 @@ class ManifestHelper {
 
   /**
    * 将远端权威的环境配置合并入本地 settings.json，保留本地原有的 UI 属性
+   * 注意:对象型配置(context / instruct / world_info / quick_reply_slots 等)按**键**递归合并,
+   * 远端值优先但本机独有的键不会被抹掉(旧实现是整体替换,会吃掉本机自己调的模板)
    */
   static patchLocalSettings(localSettings = {}, remoteSanitized = {}) {
-    const base = typeof localSettings === 'object' && localSettings !== null ? { ...localSettings } : {};
-    return {
-      ...base,
-      ...remoteSanitized
+    const isPlainObject = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+
+    const mergeValue = (base, next) => {
+      if (isPlainObject(base) && isPlainObject(next)) {
+        const out = { ...base };
+        for (const [k, v] of Object.entries(next)) out[k] = mergeValue(base[k], v);
+        return out;
+      }
+      // 数组与标量:远端优先(远端整体意图明确,不做元素级合并以免语义混乱)
+      return next;
     };
+
+    const base = isPlainObject(localSettings) ? { ...localSettings } : {};
+    for (const [k, v] of Object.entries(isPlainObject(remoteSanitized) ? remoteSanitized : {})) {
+      base[k] = mergeValue(base[k], v);
+    }
+    return base;
   }
 
   /**
