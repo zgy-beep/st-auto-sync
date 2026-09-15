@@ -997,7 +997,19 @@ async function renderSettingsPanel() {
     if (btn) btn.classList.add('disabled');
     try {
       const profile = await fetchCloudProfile();
-      await applyCloudProfile(profile, false);
+      if (!profile || !profile.settings) {
+        alert('⚠️ 云端服务器尚未固化配置母版！\n\n请先在已配置好 API、模型和预设的账号/设备（如 default-user）中，点击「⭐ 固化当前设置为云端母版」。');
+        return;
+      }
+      const applied = await applyCloudProfile(profile, false);
+      if (applied) {
+        updateCloudProfileUI(profile);
+        const sum = profile.summary || {};
+        const msg = `🎉 已成功载入云端母版！\n\n· 接口与模型: ${sum.main_api || 'API'} (${sum.model || '未指定'})\n· 预设与模板: ${sum.preset || '默认'} / ${sum.instruct || '默认'}\n\n酒馆界面需要刷新后才能完全生效，是否立即刷新网页？`;
+        if (typeof window !== 'undefined' && window.confirm && window.confirm(msg)) {
+          window.location?.reload?.();
+        }
+      }
     } catch (e) {
       alert('载入失败: ' + e.message);
     } finally {
